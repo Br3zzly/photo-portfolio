@@ -29,6 +29,34 @@ Useful flags:
 
 You can also name a single file: `python tools/publish.py photos/whatever.jpg`
 
+## Albums
+
+A subfolder of `photos/` is an album, named after the folder. Nothing to
+configure.
+
+```
+photos/
+  sunset.jpg          loose -- appears on the home page
+  Kyoto/
+    temple.jpg        album "Kyoto"
+    garden.jpg
+  Hong Kong/
+    tram.jpg          album "Hong Kong"
+```
+
+Albums appear as tiles in the same grid as loose photographs, with the album
+name in the corner. Clicking one opens that album; clicking a photo opens the
+viewer, and prev/next then walk that album rather than the whole collection.
+
+The album cover is its newest photo. Rename the folder to rename the album --
+though the old tiles stay in the bucket under the old name until you delete
+them, since the folder name is part of each photo's id.
+
+## Theme
+
+Dark by default if that is your system setting, light otherwise. The toggle in
+the corner overrides it and the choice is remembered per browser.
+
 ## Requirements
 
 ```bash
