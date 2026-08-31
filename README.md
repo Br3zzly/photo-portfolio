@@ -52,6 +52,21 @@ The album cover is its newest photo. Rename the folder to rename the album --
 though the old tiles stay in the bucket under the old name until you delete
 them, since the folder name is part of each photo's id.
 
+## The plate
+
+Under each photograph: camera maker and model in bold, then lens, focal
+length, aperture, shutter and ISO in grey, with the maker's mark on the right.
+Anything the camera did not record is simply left out rather than shown blank.
+
+The mark is the maker's name as a wordmark by default. Drop an SVG into
+`assets/logos/` (see the README there) to use real artwork instead.
+
+## Editing the site
+
+`index.html` loads the CSS and JS with a `?v=` query. Bump it whenever you
+change either file, otherwise GitHub Pages will keep serving the cached copy
+for about ten minutes and your change will look like it did not work.
+
 ## Theme
 
 Dark by default if that is your system setting, light otherwise. The toggle in
