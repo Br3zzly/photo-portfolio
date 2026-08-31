@@ -240,6 +240,7 @@ function openAt(i) {
   card.classList.toggle("instant", opening);
   sizeCard();
   if (opening) requestAnimationFrame(() => card.classList.remove("instant"));
+  refitSoon();
 
   showTiles(photo);
 }
@@ -356,6 +357,34 @@ function sizeCard() {
   }
 }
 
+/* Fit the photograph to the frame.
+ *
+ * Must be called once the card has finished changing size. OpenSeadragon
+ * computes the fit from the container it sees at that instant, so fitting
+ * while the card is still animating leaves the photograph at the previous
+ * shape's scale -- a portrait sitting small inside a correct portrait frame.
+ */
+let refitTimer = null;
+
+function refit() {
+  if (!viewer || !viewer.world.getItemCount()) return;
+  viewer.viewport.goHome(true);
+}
+
+// the card animates between each photograph's proportions; re-fit when it lands
+card.addEventListener("transitionend", (e) => {
+  if (e.target === card && (e.propertyName === "width" || e.propertyName === "height")) {
+    refit();
+  }
+});
+
+// belt and braces: transitionend does not fire if the size did not actually
+// change, and a dropped frame can swallow it
+function refitSoon() {
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(refit, 420);
+}
+
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
@@ -422,13 +451,8 @@ function makeViewer(tileSources) {
 
 function wireViewer() {
   viewer.addHandler("open", () => {
-    // Re-fit once the tile source is actually open. The card may have resized
-    // between the viewer being created and the image arriving, and without
-    // this the photograph can settle at the wrong scale inside a correctly
-    // shaped frame.
     sizeCard();
-    viewer.viewport.goHome(true);
-
+    refit();
     lightbox.classList.remove("swapping");
     viewerEl.classList.add("ready");
     setTimeout(() => placeholder.classList.add("hidden"), 220);
