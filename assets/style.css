@@ -418,13 +418,10 @@ body.lightbox-open { overflow: hidden; }
   box-shadow: none;
 }
 
-.lightbox.zoomed .plate {
-  height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  overflow: hidden;
-}
+/* display, not an opacity/height transition: a stuck transition leaves the
+   plate invisible after the zoom is released, and a missing caption is a
+   worse failure than a missing fade */
+.lightbox.zoomed .plate { display: none; }
 
 .placeholder {
   position: absolute;
@@ -464,7 +461,7 @@ body.lightbox-open { overflow: hidden; }
   gap: 20px;
   padding: 13px 16px 14px;
   background: var(--ground);
-  transition: opacity .3s ease, height .35s ease, padding .35s ease;
+  transition: none;
 }
 
 .plate-text {
