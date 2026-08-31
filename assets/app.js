@@ -480,14 +480,23 @@ function expand(on) {
   });
 }
 
+/* Leaving full-bleed. The re-fit is issued twice on purpose: OpenSeadragon
+   notices a container resize on its own update loop, so an immediate goHome
+   still fits to the old, larger frame and leaves the photograph sitting about
+   11% too large. The second pass lands after it has caught up. */
+function collapse() {
+  expand(false);
+  const home = () => { if (viewer && viewer.viewport) viewer.viewport.goHome(); };
+  requestAnimationFrame(home);
+  setTimeout(home, 450);
+}
+
 function toggleZoom(point) {
   const item = viewer.world.getItemAt(0);
   if (!item) return;
 
   if (expanded) {
-    expand(false);
-    // the frame has shrunk; re-fit once it has
-    requestAnimationFrame(() => viewer.viewport.goHome());
+    collapse();
     return;
   }
 
@@ -515,8 +524,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     // first Escape leaves a zoom, second closes the photo
     if (expanded) {
-      expand(false);
-      requestAnimationFrame(() => viewer.viewport.goHome());
+      collapse();
     } else {
       close();
     }
