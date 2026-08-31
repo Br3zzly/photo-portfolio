@@ -91,7 +91,8 @@ def prepare(src, args):
     photo_id, album = photo_id_for(src)
 
     existing = pipeline.load_sidecar(photo_id)
-    tiles_exist = (TILES_DIR / f"{photo_id}.dzi").exists()
+    rev = existing.get("rev") if existing else None
+    tiles_exist = bool(rev) and (TILES_DIR / f"{pipeline.tile_base(photo_id, rev)}.dzi").exists()
     if existing and tiles_exist and not args.force:
         return None
 
@@ -144,14 +145,16 @@ def finish(item, edited, args):
         edited.pop("album", None)   # a photo moved out of a folder loses it
 
     t0 = time.time()
-    (count, total), cached = pipeline.make_tiles(
+    (count, total), cached, rev = pipeline.make_tiles(
         src, photo_id, force=args.force, rotate=rotate)
+    edited["rev"] = rev
     verb = "reused" if cached else "built"
     print(f"    {photo_id}: {verb} {count} tiles, {human(total)} "
           f"in {time.time()-t0:.1f}s")
 
-    # the thumbnail was built before you chose a rotation, so redo it
-    pipeline.make_thumb(src, photo_id, force=True, rotate=rotate)
+    # the preview thumbnail was built before you chose a rotation, and before
+    # the revision was known, so redo it under the final name
+    pipeline.make_thumb(src, photo_id, force=True, rotate=rotate, rev=rev)
     edited["lqip"] = pipeline.make_lqip(src, rotate=rotate)
     pipeline.save_sidecar(photo_id, edited)
     return edited
@@ -162,7 +165,10 @@ def build_manifest():
     photos = []
     for sidecar in sorted(PHOTOS_DIR.rglob("*.json")):
         data = json.loads(sidecar.read_text(encoding="utf-8"))
-        if not (TILES_DIR / f"{data['id']}.dzi").exists():
+        rev = data.get("rev")
+        if not rev:
+            continue
+        if not (TILES_DIR / f"{pipeline.tile_base(data['id'], rev)}.dzi").exists():
             continue
         photos.append(data)
 
@@ -183,6 +189,7 @@ def build_manifest():
             albums.append({
                 "name": name,
                 "cover": photo["id"],
+                "coverRev": photo.get("rev", ""),
                 "coverWidth": photo.get("width"),
                 "coverHeight": photo.get("height"),
                 "coverLqip": photo.get("lqip", ""),

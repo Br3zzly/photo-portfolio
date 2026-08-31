@@ -130,7 +130,11 @@ backup of metadata you typed by hand.
 - Tiles are WebP quality 90 at 512 px with 1 px overlap. Quality 90 was chosen
   after comparing 80/90/lossless on real files: on detailed content 90 costs
   only 8-31% more than 80, while lossless costs 26x for no visible gain.
-- Tiles are immutable and cached for a year. The manifest is cached for a
-  minute so new photos appear quickly.
+- Tile paths carry a short fingerprint of the source file, its rotation and
+  the encoder settings: `LL_06592__a1b2c3d4_files/`. Re-tiling a photo changes
+  the fingerprint, so it becomes a new URL. That is what makes it safe to
+  serve tiles as `immutable` for a year -- an edited photo can never collide
+  with a cached copy of its old self. Thumbnails work the same way.
+- The manifest is cached for a minute, so new photos appear quickly.
 - Export sRGB. The publish script warns if a photo is not sRGB.
 - GPS is never published. The script warns if a source file contains it.

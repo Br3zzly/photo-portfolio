@@ -155,7 +155,7 @@ function tileShell(ar, label) {
   return tile;
 }
 
-function thumbImg(id, w, h, lqip, alt) {
+function thumbImg(id, rev, w, h, lqip, alt) {
   const img = document.createElement("img");
   img.loading = "lazy";
   img.decoding = "async";
@@ -164,7 +164,7 @@ function thumbImg(id, w, h, lqip, alt) {
   img.alt = alt || "";
   // the inlined placeholder paints immediately, so tiles are never empty
   if (lqip) img.style.backgroundImage = `url("${lqip}")`;
-  img.src = `${BUCKET}/thumbs/${id}.webp`;
+  img.src = `${BUCKET}/thumbs/${rev ? `${id}__${rev}` : id}.webp`;
 
   const reveal = () => img.classList.add("ready");
   if (img.complete) reveal();
@@ -176,7 +176,7 @@ function photoTile(photo, i) {
   const ar = (photo.width || 3) / (photo.height || 2);
   const tile = tileShell(ar, photo.title || photo.id);
   tile.appendChild(
-    thumbImg(photo.id, photo.width, photo.height, photo.lqip, photo.title)
+    thumbImg(photo.id, photo.rev, photo.width, photo.height, photo.lqip, photo.title)
   );
   tile.addEventListener("click", () => {
     openAt(i);
@@ -190,7 +190,7 @@ function albumTile(a) {
   const tile = tileShell(ar, `Album: ${a.name}`);
   tile.classList.add("album");
   tile.appendChild(
-    thumbImg(a.cover, a.coverWidth, a.coverHeight, a.coverLqip, "")
+    thumbImg(a.cover, a.coverRev, a.coverWidth, a.coverHeight, a.coverLqip, "")
   );
 
   const label = document.createElement("span");
@@ -367,7 +367,11 @@ stage.addEventListener("transitionend", (e) => {
 /* --- deep zoom ----------------------------------------------------------- */
 
 function showTiles(photo) {
-  const source = `${BUCKET}/${photo.id}.dzi`;
+  // the tile path carries a fingerprint of the source, so re-tiling a photo
+  // produces a new URL rather than quietly colliding with a cached copy
+  const source = photo.rev
+    ? `${BUCKET}/${photo.id}__${photo.rev}.dzi`
+    : `${BUCKET}/${photo.id}.dzi`;
 
   if (!viewer) {
     viewer = makeViewer(source);

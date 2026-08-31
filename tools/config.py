@@ -32,7 +32,8 @@ THUMB_QUALITY = 82
 LQIP_WIDTH = 24
 
 # --- Publishing --------------------------------------------------------------
-# Tiles never change once written, so they can be cached effectively forever.
+# Tiles never change once written -- their path carries a fingerprint of the
+# source, so re-tiling produces a new URL. That makes `immutable` truthful.
 TILE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 # The manifest changes every time you publish, so it must not be cached hard.

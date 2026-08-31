@@ -6,6 +6,7 @@ duplicate anything, unless force=True.
 """
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -233,16 +234,55 @@ def _source(src, rotate=0):
     return str(tmp), tmp
 
 
+def content_rev(src, rotate=0):
+    """
+    A short fingerprint of everything that affects the tiles.
+
+    Tiles are served with `immutable`, which promises a URL's bytes will never
+    change. Re-tiling a photo -- to correct its rotation, say -- broke that
+    promise and left browsers showing a year-old copy. Putting the fingerprint
+    in the path means changed tiles are simply a different URL, so the promise
+    holds and nothing goes stale.
+    """
+    st = Path(src).stat()
+    key = (f"{st.st_size}:{int(st.st_mtime)}:{rotate}:"
+           f"{config.TILE_QUALITY}:{config.TILE_SIZE}:{config.OVERLAP}")
+    return hashlib.sha1(key.encode()).hexdigest()[:8]
+
+
+def tile_base(photo_id, rev):
+    """Path stem for a photo's pyramid, e.g. 'Kyoto/temple__a1b2c3d4'."""
+    return f"{photo_id}__{rev}"
+
+
+def _drop_other_revs(photo_id, keep_rev):
+    """Remove pyramids for superseded revisions of the same photograph."""
+    parent = (TILES_DIR / photo_id).parent
+    stem = Path(photo_id).name
+    if not parent.is_dir():
+        return
+    for p in parent.glob(f"{stem}__*"):
+        if p.name.startswith(f"{stem}__{keep_rev}"):
+            continue
+        if p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+        else:
+            p.unlink(missing_ok=True)
+
+
 def make_tiles(src, photo_id, force=False, rotate=0):
-    """Build the DeepZoom pyramid. Returns (tile_count, total_bytes)."""
+    """Build the DeepZoom pyramid. Returns ((count, bytes), cached, rev)."""
     TILES_DIR.mkdir(exist_ok=True)
     # photo_id may be "Album/name", so make the album subfolder too
     (TILES_DIR / photo_id).parent.mkdir(parents=True, exist_ok=True)
-    dzi = TILES_DIR / f"{photo_id}.dzi"
-    files_dir = TILES_DIR / f"{photo_id}_files"
+
+    rev = content_rev(src, rotate)
+    base = tile_base(photo_id, rev)
+    dzi = TILES_DIR / f"{base}.dzi"
+    files_dir = TILES_DIR / f"{base}_files"
 
     if dzi.exists() and files_dir.is_dir() and not force:
-        return _tile_stats(files_dir), True  # already done
+        return _tile_stats(files_dir), True, rev
 
     if files_dir.exists():
         shutil.rmtree(files_dir)
@@ -251,7 +291,7 @@ def make_tiles(src, photo_id, force=False, rotate=0):
     spec, tmp = _source(src, rotate)
     try:
         run([
-            find_tool("vips"), "dzsave", spec, str(TILES_DIR / photo_id),
+            find_tool("vips"), "dzsave", spec, str(TILES_DIR / base),
             "--tile-size", str(config.TILE_SIZE),
             "--overlap", str(config.OVERLAP),
             "--suffix", f".webp[Q={config.TILE_QUALITY}]",
@@ -259,7 +299,8 @@ def make_tiles(src, photo_id, force=False, rotate=0):
     finally:
         if tmp:
             tmp.unlink(missing_ok=True)
-    return _tile_stats(files_dir), False
+    _drop_other_revs(photo_id, rev)
+    return _tile_stats(files_dir), False, rev
 
 
 def _tile_stats(files_dir):
@@ -271,10 +312,13 @@ def _tile_stats(files_dir):
     return count, total
 
 
-def make_thumb(src, photo_id, force=False, rotate=0):
+def make_thumb(src, photo_id, force=False, rotate=0, rev=None):
+    """Thumbnails carry the same fingerprint as the tiles, for the same
+    reason: they are cached hard and regenerated when a photo is re-tiled."""
     THUMBS_DIR.mkdir(exist_ok=True)
     (THUMBS_DIR / photo_id).parent.mkdir(parents=True, exist_ok=True)
-    dest = THUMBS_DIR / f"{photo_id}.webp"
+    stem = tile_base(photo_id, rev) if rev else photo_id
+    dest = THUMBS_DIR / f"{stem}.webp"
     if dest.exists() and not force:
         return dest
     # keep=icc drops EXIF/XMP but preserves the colour profile. Without this,

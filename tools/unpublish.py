@@ -67,11 +67,18 @@ def source_for(photo_id):
 def remove(photo_id, keep_original):
     freed = 0
 
-    files_dir = TILES_DIR / f"{photo_id}_files"
-    if files_dir.is_dir():
-        freed += sum(f.stat().st_size for f in files_dir.rglob("*") if f.is_file())
-        shutil.rmtree(files_dir)
-    (TILES_DIR / f"{photo_id}.dzi").unlink(missing_ok=True)
+    # tiles live under a content-versioned stem, and there may be more than
+    # one revision lying around
+    parent = (TILES_DIR / photo_id).parent
+    stem = Path(photo_id).name
+    if parent.is_dir():
+        for p in list(parent.glob(f"{stem}__*")):
+            if p.is_dir():
+                freed += sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+                shutil.rmtree(p, ignore_errors=True)
+            else:
+                freed += p.stat().st_size
+                p.unlink(missing_ok=True)
 
     thumb = THUMBS_DIR / f"{photo_id}.webp"
     if thumb.exists():
@@ -108,16 +115,23 @@ def purge_remote(ids):
 
     for n, photo_id in enumerate(ids, 1):
         print(f"    [{n}/{total}] {photo_id}", flush=True)
+        # every revision of this photo, whatever its fingerprint
+        parent = str(Path(photo_id).parent).replace("\\", "/")
+        prefix = "" if parent == "." else parent + "/"
+        stem = Path(photo_id).name
         try:
-            run([rclone, "purge", f"{dest}/{photo_id}_files",
-                 "--transfers", "48", "--checkers", "48", "--s3-no-check-bucket"])
+            run([rclone, "delete", f"{dest}/{prefix}",
+                 "--include", f"{stem}__*_files/**",
+                 "--include", f"{stem}__*.dzi",
+                 "--transfers", "48", "--checkers", "48",
+                 "--rmdirs", "--s3-no-check-bucket"])
         except RuntimeError:
             pass          # already gone
-        for path in (f"{photo_id}.dzi", f"thumbs/{photo_id}.webp"):
-            try:
-                run([rclone, "deletefile", f"{dest}/{path}", "--s3-no-check-bucket"])
-            except RuntimeError:
-                pass
+        try:
+            run([rclone, "deletefile", f"{dest}/thumbs/{photo_id}.webp",
+                 "--s3-no-check-bucket"])
+        except RuntimeError:
+            pass
 
 
 def main():
