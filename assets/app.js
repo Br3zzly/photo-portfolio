@@ -239,8 +239,6 @@ function openAt(i) {
   placeholder.src = photo.lqip || "";
   placeholder.classList.remove("hidden");
   viewerEl.classList.remove("ready");
-  expanded = false;
-  lightbox.classList.remove("zoomed");
 
   fillMeta(photo);
   prevBtn.disabled = i === 0;
@@ -254,8 +252,7 @@ function openAt(i) {
 function closeLightbox() {
   if (index < 0) return;
   index = -1;
-  expanded = false;
-  lightbox.classList.remove("open", "zoomed", "interacting");
+  lightbox.classList.remove("open", "interacting");
   document.body.classList.remove("lightbox-open");
   setTimeout(() => {
     lightbox.hidden = true;
@@ -333,7 +330,7 @@ function makerMark(photo) {
    ------------------------------------------------------------------------- */
 
 function sizeCard() {
-  if (index < 0 || expanded) return;
+  if (index < 0) return;
   const photo = shown[index];
   if (!photo) return;
 
@@ -454,61 +451,32 @@ function markInteracting() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => lightbox.classList.remove("interacting"), 1400);
 
-  // Zooming in by wheel or pinch also earns the full screen. Only ever set
-  // here, never cleared -- see expand() for why.
-  if (!expanded && viewer.viewport.getZoom() > viewer.viewport.getHomeZoom() * 1.15) {
-    expand(true);
-  }
 }
 
-/* Whether the photograph has the whole screen.
- *
- * This is explicit state, deliberately. Deriving it from the zoom level was a
- * feedback loop: the card's size depends on this flag, OpenSeadragon's home
- * zoom depends on the card's size, and the flag was computed by comparing the
- * current zoom against home. Collapsing changed the container, which changed
- * home, which re-triggered the expansion -- so it flickered. */
-let expanded = false;
-
-function expand(on) {
-  if (expanded === on) return;
-  expanded = on;
-  lightbox.classList.toggle("zoomed", on);
-  // let the container finish resizing before OpenSeadragon re-fits to it
-  requestAnimationFrame(() => {
-    if (viewer && viewer.viewport) viewer.viewport.applyConstraints(true);
-  });
+/* The photograph never leaves the card, so the card never changes size, so
+   this can be read straight off the viewer without the feedback loop that
+   the old full-bleed mode had. */
+function isZoomedIn() {
+  if (!viewer || !viewer.world.getItemCount()) return false;
+  return viewer.viewport.getZoom(true) > viewer.viewport.getHomeZoom() * 1.05;
 }
 
-/* Leaving full-bleed. The re-fit is issued twice on purpose: OpenSeadragon
-   notices a container resize on its own update loop, so an immediate goHome
-   still fits to the old, larger frame and leaves the photograph sitting about
-   11% too large. The second pass lands after it has caught up. */
-function collapse() {
-  expand(false);
-  const home = () => { if (viewer && viewer.viewport) viewer.viewport.goHome(); };
-  requestAnimationFrame(home);
-  setTimeout(home, 450);
-}
-
+/* Double-click toggles between fit and 1:1, inside the card. */
 function toggleZoom(point) {
   const item = viewer.world.getItemAt(0);
   if (!item) return;
 
-  if (expanded) {
-    collapse();
+  if (isZoomedIn()) {
+    viewer.viewport.goHome();
     return;
   }
 
-  expand(true);
-  requestAnimationFrame(() => {
-    const full = item.imageToViewportZoom(1);
-    const home = viewer.viewport.getHomeZoom();
-    const target = full > home * 1.05 ? full : home * 2;
-    viewer.viewport.zoomTo(
-      target, point ? viewer.viewport.pointFromPixel(point) : null
-    );
-  });
+  const full = item.imageToViewportZoom(1);
+  const home = viewer.viewport.getHomeZoom();
+  const target = full > home * 1.05 ? full : home * 2;
+  viewer.viewport.zoomTo(
+    target, point ? viewer.viewport.pointFromPixel(point) : null
+  );
 }
 
 
@@ -523,14 +491,14 @@ document.addEventListener("keydown", (e) => {
 
   if (e.key === "Escape") {
     // first Escape leaves a zoom, second closes the photo
-    if (expanded) {
-      collapse();
+    if (isZoomedIn()) {
+      viewer.viewport.goHome();
     } else {
       close();
     }
-  } else if (e.key === "ArrowLeft" && !expanded) {
+  } else if (e.key === "ArrowLeft" && !isZoomedIn()) {
     step(-1);
-  } else if (e.key === "ArrowRight" && !expanded) {
+  } else if (e.key === "ArrowRight" && !isZoomedIn()) {
     step(1);
   }
 });
@@ -540,7 +508,7 @@ document.addEventListener("keydown", (e) => {
 let touchStart = null;
 
 stage.addEventListener("touchstart", (e) => {
-  if (e.touches.length !== 1 || expanded) return;
+  if (e.touches.length !== 1 || isZoomedIn()) return;
   touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
 }, { passive: true });
 

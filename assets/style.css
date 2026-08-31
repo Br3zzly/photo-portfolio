@@ -81,7 +81,6 @@ body {
    the blur cheap and stops it bleeding into fixed UI. */
 body.lightbox-open { overflow: hidden; }
 
-
 /* --- masthead ------------------------------------------------------------ */
 
 .masthead {
@@ -105,7 +104,6 @@ body.lightbox-open { overflow: hidden; }
   font-style: italic;
   max-width: 46ch;
 }
-
 
 /* --- justified grid ------------------------------------------------------
    Each tile grows in proportion to its aspect ratio, so a row of photos fills
@@ -168,7 +166,6 @@ body.lightbox-open { overflow: hidden; }
   outline-offset: 3px;
 }
 
-
 /* --- album tiles ---------------------------------------------------------
    An album sits in the same grid as a photograph, distinguished only by its
    name in the corner and a slight darkening so the label stays readable.
@@ -219,7 +216,6 @@ body.lightbox-open { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 
-
 /* --- album view ---------------------------------------------------------- */
 
 .album-head {
@@ -257,7 +253,6 @@ body.lightbox-open { overflow: hidden; }
 
 .back:hover { color: var(--text); }
 .back:focus-visible { outline: 2px solid var(--safelight); outline-offset: 3px; }
-
 
 /* --- theme toggle -------------------------------------------------------- */
 
@@ -310,7 +305,6 @@ body.lightbox-open { overflow: hidden; }
   .tile img { object-fit: contain; }
 }
 
-
 /* --- status / colophon --------------------------------------------------- */
 
 .status, .colophon {
@@ -329,7 +323,6 @@ body.lightbox-open { overflow: hidden; }
   padding-top: 40px;
   padding-bottom: 60px;
 }
-
 
 /* --- lightbox ------------------------------------------------------------
    Opens over the live gallery, which is blurred in place. That keeps the two
@@ -360,11 +353,6 @@ body.lightbox-open { overflow: hidden; }
   backdrop-filter: blur(28px) saturate(0.7);
 }
 
-/* When the viewer is zoomed in, the photo takes the whole screen and the
-   surrounding chrome gets out of the way. */
-.lightbox.zoomed .lightbox-scrim { background: var(--ground); }
-
-
 .stage {
   position: relative;
   margin: 0;
@@ -376,8 +364,6 @@ body.lightbox-open { overflow: hidden; }
   padding: clamp(14px, 4vh, 48px) clamp(14px, 5vw, 84px);
   transition: padding .35s cubic-bezier(.22,.61,.36,1);
 }
-
-.lightbox.zoomed .stage { padding: 0; }
 
 /* Image and plate as one object. Its size is set in JS from the photograph's
    aspect ratio, so the plate is always exactly as wide as the image. */
@@ -409,20 +395,6 @@ body.lightbox-open { overflow: hidden; }
   overflow: hidden;
 }
 
-/* zoomed: the photograph takes the whole screen and the plate steps aside */
-.lightbox.zoomed .card {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none;
-  max-height: none;
-  box-shadow: none;
-}
-
-/* display, not an opacity/height transition: a stuck transition leaves the
-   plate invisible after the zoom is released, and a missing caption is a
-   worse failure than a missing fade */
-.lightbox.zoomed .plate { display: none; }
-
 .placeholder {
   position: absolute;
   inset: 0;
@@ -446,7 +418,6 @@ body.lightbox-open { overflow: hidden; }
 }
 
 .viewer.ready { opacity: 1; }
-
 
 /* --- the plate ------------------------------------------------------------
    Attached to the underside of the photograph, like the caption card under a
@@ -527,7 +498,6 @@ body.lightbox-open { overflow: hidden; }
   .plate-mark img { height: 14px; }
 }
 
-
 /* --- controls ------------------------------------------------------------ */
 
 .close, .nav {
@@ -575,8 +545,6 @@ body.lightbox-open { overflow: hidden; }
   .nav { display: none; }   /* swipe instead */
 }
 
-
-
 /* --- OpenSeadragon navigator --------------------------------------------- */
 
 .openseadragon-canvas { outline: none !important; }
@@ -586,7 +554,6 @@ body.lightbox-open { overflow: hidden; }
   background: var(--raised) !important;
   border-radius: 2px;
 }
-
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
