@@ -239,6 +239,7 @@ function openAt(i) {
   placeholder.src = photo.lqip || "";
   placeholder.classList.remove("hidden");
   viewerEl.classList.remove("ready");
+  expanded = false;
   lightbox.classList.remove("zoomed");
 
   fillMeta(photo);
@@ -253,6 +254,7 @@ function openAt(i) {
 function closeLightbox() {
   if (index < 0) return;
   index = -1;
+  expanded = false;
   lightbox.classList.remove("open", "zoomed", "interacting");
   document.body.classList.remove("lightbox-open");
   setTimeout(() => {
@@ -331,7 +333,7 @@ function makerMark(photo) {
    ------------------------------------------------------------------------- */
 
 function sizeCard() {
-  if (index < 0 || lightbox.classList.contains("zoomed")) return;
+  if (index < 0 || expanded) return;
   const photo = shown[index];
   if (!photo) return;
 
@@ -442,48 +444,62 @@ function wireViewer() {
     viewer.addHandler(evt, markInteracting)
   );
 
-  viewer.addHandler("animation-finish", () => {
-    syncZoomState();
-    lightbox.classList.remove("interacting");
-  });
+  viewer.addHandler("animation-finish", () =>
+    lightbox.classList.remove("interacting")
+  );
 }
 
 function markInteracting() {
   lightbox.classList.add("interacting");
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    lightbox.classList.remove("interacting");
-    syncZoomState();
-  }, 1400);
+  idleTimer = setTimeout(() => lightbox.classList.remove("interacting"), 1400);
+
+  // Zooming in by wheel or pinch also earns the full screen. Only ever set
+  // here, never cleared -- see expand() for why.
+  if (!expanded && viewer.viewport.getZoom() > viewer.viewport.getHomeZoom() * 1.15) {
+    expand(true);
+  }
+}
+
+/* Whether the photograph has the whole screen.
+ *
+ * This is explicit state, deliberately. Deriving it from the zoom level was a
+ * feedback loop: the card's size depends on this flag, OpenSeadragon's home
+ * zoom depends on the card's size, and the flag was computed by comparing the
+ * current zoom against home. Collapsing changed the container, which changed
+ * home, which re-triggered the expansion -- so it flickered. */
+let expanded = false;
+
+function expand(on) {
+  if (expanded === on) return;
+  expanded = on;
+  lightbox.classList.toggle("zoomed", on);
+  // let the container finish resizing before OpenSeadragon re-fits to it
+  requestAnimationFrame(() => {
+    if (viewer && viewer.viewport) viewer.viewport.applyConstraints(true);
+  });
 }
 
 function toggleZoom(point) {
   const item = viewer.world.getItemAt(0);
   if (!item) return;
 
-  const full = item.imageToViewportZoom(1);
-  const home = viewer.viewport.getHomeZoom();
-  const target = full > home * 1.05 ? full : home * 2;
-
-  if (viewer.viewport.getZoom() < target * 0.95) {
-    viewer.viewport.zoomTo(target, point ? viewer.viewport.pointFromPixel(point) : null);
-  } else {
-    viewer.viewport.goHome();
+  if (expanded) {
+    expand(false);
+    // the frame has shrunk; re-fit once it has
+    requestAnimationFrame(() => viewer.viewport.goHome());
+    return;
   }
-  setTimeout(syncZoomState, 60);
-}
 
-/* Zooming past "fit" promotes the photo to full-bleed and pulls the chrome
-   back; returning to fit restores the framed view. */
-function syncZoomState() {
-  if (!viewer || !viewer.world.getItemCount()) return;
-  const zoomed =
-    viewer.viewport.getZoom() > viewer.viewport.getHomeZoom() * 1.08;
-  // The framed size stays in the card's inline style the whole time. Going
-  // full-bleed overrides it from CSS with !important, so dropping the class
-  // restores the framed size on its own -- nothing to recompute, and no
-  // dependence on when a transition happens to finish.
-  lightbox.classList.toggle("zoomed", zoomed);
+  expand(true);
+  requestAnimationFrame(() => {
+    const full = item.imageToViewportZoom(1);
+    const home = viewer.viewport.getHomeZoom();
+    const target = full > home * 1.05 ? full : home * 2;
+    viewer.viewport.zoomTo(
+      target, point ? viewer.viewport.pointFromPixel(point) : null
+    );
+  });
 }
 
 
@@ -498,15 +514,15 @@ document.addEventListener("keydown", (e) => {
 
   if (e.key === "Escape") {
     // first Escape leaves a zoom, second closes the photo
-    if (lightbox.classList.contains("zoomed")) {
-      viewer.viewport.goHome();
-      setTimeout(syncZoomState, 80);
+    if (expanded) {
+      expand(false);
+      requestAnimationFrame(() => viewer.viewport.goHome());
     } else {
       close();
     }
-  } else if (e.key === "ArrowLeft" && !lightbox.classList.contains("zoomed")) {
+  } else if (e.key === "ArrowLeft" && !expanded) {
     step(-1);
-  } else if (e.key === "ArrowRight" && !lightbox.classList.contains("zoomed")) {
+  } else if (e.key === "ArrowRight" && !expanded) {
     step(1);
   }
 });
@@ -516,7 +532,7 @@ document.addEventListener("keydown", (e) => {
 let touchStart = null;
 
 stage.addEventListener("touchstart", (e) => {
-  if (e.touches.length !== 1 || lightbox.classList.contains("zoomed")) return;
+  if (e.touches.length !== 1 || expanded) return;
   touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
 }, { passive: true });
 
