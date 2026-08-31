@@ -220,10 +220,13 @@ function openAt(i) {
   const photo = shown[i];
   index = i;
 
+  const opening = lightbox.hidden;          // opening fresh vs stepping along
   lightbox.hidden = false;
   document.body.classList.add("lightbox-open");
   requestAnimationFrame(() => lightbox.classList.add("open"));
 
+  // the outgoing canvas still holds the previous photograph
+  lightbox.classList.add("swapping");
   placeholder.src = photo.lqip || "";
   placeholder.classList.remove("hidden");
   viewerEl.classList.remove("ready");
@@ -232,7 +235,12 @@ function openAt(i) {
   prevBtn.disabled = i === 0;
   nextBtn.disabled = i === shown.length - 1;
 
+  // sizing without animation on a first open, animated when stepping between
+  // photographs of different shapes
+  card.classList.toggle("instant", opening);
   sizeCard();
+  if (opening) requestAnimationFrame(() => card.classList.remove("instant"));
+
   showTiles(photo);
 }
 
@@ -414,6 +422,14 @@ function makeViewer(tileSources) {
 
 function wireViewer() {
   viewer.addHandler("open", () => {
+    // Re-fit once the tile source is actually open. The card may have resized
+    // between the viewer being created and the image arriving, and without
+    // this the photograph can settle at the wrong scale inside a correctly
+    // shaped frame.
+    sizeCard();
+    viewer.viewport.goHome(true);
+
+    lightbox.classList.remove("swapping");
     viewerEl.classList.add("ready");
     setTimeout(() => placeholder.classList.add("hidden"), 220);
   });

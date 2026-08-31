@@ -341,9 +341,18 @@ body.lightbox-open { overflow: hidden; }
   background: var(--ground);
   max-width: 100%;
   max-height: 100%;
-  transition: box-shadow .35s ease;
+  /* the card takes each photograph's shape, so stepping between a portrait
+     and a landscape changes its proportions -- animate that instead of
+     snapping, or every step through the gallery reads as a glitch */
+  transition: width .34s cubic-bezier(.22,.61,.36,1),
+              height .34s cubic-bezier(.22,.61,.36,1),
+              box-shadow .35s ease;
   box-shadow: var(--card-shadow);
 }
+
+/* no animation on the very first open: there is no previous shape to move
+   from, and animating out of nothing looks like a glitch of its own */
+.card.instant { transition: none; }
 
 .frame {
   position: relative;
@@ -366,6 +375,10 @@ body.lightbox-open { overflow: hidden; }
 }
 
 .placeholder.hidden { opacity: 0; }
+
+/* while a new photograph is being opened the old canvas is stale, so hide it
+   rather than letting it flash under the incoming blur */
+.lightbox.swapping .viewer { opacity: 0; transition: none; }
 
 .viewer {
   position: absolute;
