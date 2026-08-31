@@ -479,19 +479,11 @@ function syncZoomState() {
   if (!viewer || !viewer.world.getItemCount()) return;
   const zoomed =
     viewer.viewport.getZoom() > viewer.viewport.getHomeZoom() * 1.08;
-  const was = lightbox.classList.contains("zoomed");
+  // The framed size stays in the card's inline style the whole time. Going
+  // full-bleed overrides it from CSS with !important, so dropping the class
+  // restores the framed size on its own -- nothing to recompute, and no
+  // dependence on when a transition happens to finish.
   lightbox.classList.toggle("zoomed", zoomed);
-
-  // Coming back from full-bleed the card must be measured again -- but not
-  // yet. The stage's padding is still animating back from 0, so measuring now
-  // would size the card against a stage that is about to get narrower.
-  // The transitionend handler below does it once the padding has settled.
-  if (was && !zoomed) {
-    card.style.width = "";
-    card.style.height = "";
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(sizeCard, 420);   // fallback if no transitionend
-  }
 }
 
 
