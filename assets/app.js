@@ -16,7 +16,8 @@ const lightbox    = el("lightbox");
 const stage       = el("stage");
 const placeholder = el("placeholder");
 const viewerEl    = el("viewer");
-const hint        = el("hint");
+const card        = el("card");
+const plate       = el("plate");
 const prevBtn     = el("prev");
 const nextBtn     = el("next");
 
@@ -244,10 +245,7 @@ function openAt(i) {
   prevBtn.disabled = i === 0;
   nextBtn.disabled = i === shown.length - 1;
 
-  hint.classList.remove("gone");
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => hint.classList.add("gone"), 3200);
-
+  sizeCard();
   showTiles(photo);
 }
 
@@ -277,18 +275,17 @@ function step(delta) {
   history.replaceState({}, "", `${location.pathname}?id=${encodeURIComponent(shown[next].id)}`);
 }
 
+/* The plate under the photograph:
+     left, bold  -- camera maker + model
+     left, grey  -- lens, focal length, aperture, shutter, ISO
+     right       -- the maker's mark
+   Everything is built from what exists, so a stacked frame with no lens or
+   shutter collapses to what it has rather than rendering empty slots. */
 function fillMeta(photo) {
-  el("m-title").textContent = photo.title || "";
-  el("m-caption").textContent = photo.caption || "";
+  el("m-camera").textContent = photo.camera || "";
 
-  // Built from whatever exists. A stacked astro frame has no lens or shutter,
-  // so the strip collapses to what it has rather than rendering empty slots.
-  el("m-gear").textContent =
-    [photo.camera, photo.lens].filter(Boolean).join(" · ");
-
-  // separate elements, not a joined string -- HTML collapses runs of spaces,
-  // so the gaps have to come from CSS
   const parts = [
+    photo.lens,
     photo.focal,
     photo.aperture,
     photo.shutter ? `${photo.shutter}s` : "",
@@ -296,8 +293,9 @@ function fillMeta(photo) {
     ...Object.values(photo.extra || {}).filter(Boolean),
   ].filter(Boolean);
 
-  const exposure = el("m-exposure");
-  exposure.replaceChildren(
+  // separate elements, not a joined string -- HTML collapses runs of spaces,
+  // so the gaps have to come from CSS
+  el("m-spec").replaceChildren(
     ...parts.map((p) => {
       const s = document.createElement("span");
       s.textContent = p;
@@ -305,16 +303,65 @@ function fillMeta(photo) {
     })
   );
 
-  el("m-date").textContent = photo.date ? formatDate(photo.date) : "";
+  el("m-mark").replaceChildren(makerMark(photo));
 }
 
-function formatDate(iso) {
-  const d = new Date(iso + "T00:00:00");
-  if (isNaN(d)) return iso;
-  return d.toLocaleDateString(undefined, {
-    year: "numeric", month: "long", day: "numeric",
-  });
+/* Uses assets/logos/<maker>.svg when you have supplied one, otherwise sets the
+   maker's name as a wordmark. No manufacturer artwork ships with this repo. */
+function makerMark(photo) {
+  const make = (photo.make || (photo.camera || "").split(/\s+/)[0] || "").trim();
+  if (!make) return document.createDocumentFragment();
+
+  const word = document.createElement("span");
+  word.className = "wordmark";
+  word.textContent = make;
+
+  const slug = make.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const img = document.createElement("img");
+  img.alt = make;
+  img.addEventListener("error", () => img.replaceWith(word), { once: true });
+  img.src = `assets/logos/${slug}.svg`;
+  return img;
 }
+
+
+/* --- sizing --------------------------------------------------------------
+   The card is laid out from the photograph's aspect ratio rather than left to
+   the browser, because the plate's height is only known after it is filled.
+   ------------------------------------------------------------------------- */
+
+function sizeCard() {
+  if (index < 0 || lightbox.classList.contains("zoomed")) return;
+  const photo = shown[index];
+  if (!photo) return;
+
+  const ar = (photo.width || 3) / (photo.height || 2);
+  const cs = getComputedStyle(stage);
+  const availW = stage.clientWidth
+    - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = stage.clientHeight
+    - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+
+  // two passes: the plate can wrap, so its height depends on the width we pick
+  let w = availW;
+  for (let pass = 0; pass < 2; pass++) {
+    card.style.width = `${Math.round(w)}px`;
+    const plateH = plate.offsetHeight;
+    let frameH = w / ar;
+    if (frameH > availH - plateH) {
+      frameH = availH - plateH;
+      w = Math.min(availW, frameH * ar);
+    }
+    card.style.width = `${Math.round(w)}px`;
+    card.style.height = `${Math.round(w / ar + plateH)}px`;
+  }
+}
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(sizeCard, 120);
+});
 
 
 /* --- deep zoom ----------------------------------------------------------- */
@@ -390,7 +437,6 @@ function wireViewer() {
 
 function markInteracting() {
   lightbox.classList.add("interacting");
-  hint.classList.add("gone");
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     lightbox.classList.remove("interacting");
@@ -420,7 +466,10 @@ function syncZoomState() {
   if (!viewer || !viewer.world.getItemCount()) return;
   const zoomed =
     viewer.viewport.getZoom() > viewer.viewport.getHomeZoom() * 1.08;
+  const was = lightbox.classList.contains("zoomed");
   lightbox.classList.toggle("zoomed", zoomed);
+  // coming back from full-bleed, the card has to be measured again
+  if (was && !zoomed) { card.style.width = ""; card.style.height = ""; sizeCard(); }
 }
 
 

@@ -96,24 +96,25 @@
     </svg>
   </button>
 
-  <figure class="stage" id="stage">
-    <!-- the tiny placeholder shows instantly; OpenSeadragon draws over it -->
-    <img class="placeholder" id="placeholder" alt="" aria-hidden="true">
-    <div class="viewer" id="viewer"></div>
-    <p class="hint" id="hint">double-click to zoom</p>
-  </figure>
+  <div class="stage" id="stage">
+    <!-- image and plate are one unit, sized together, so the plate is always
+         exactly as wide as the photograph above it -->
+    <figure class="card" id="card">
+      <div class="frame" id="frame">
+        <!-- the tiny placeholder shows instantly; OpenSeadragon draws over it -->
+        <img class="placeholder" id="placeholder" alt="" aria-hidden="true">
+        <div class="viewer" id="viewer"></div>
+      </div>
 
-  <figcaption class="meta" id="meta">
-    <div class="meta-left">
-      <span class="meta-title" id="m-title"></span>
-      <span class="meta-caption" id="m-caption"></span>
-    </div>
-    <div class="meta-right">
-      <span class="meta-gear" id="m-gear"></span>
-      <span class="meta-exposure" id="m-exposure"></span>
-      <span class="meta-date" id="m-date"></span>
-    </div>
-  </figcaption>
+      <figcaption class="plate" id="plate">
+        <div class="plate-text">
+          <span class="plate-body" id="m-camera"></span>
+          <span class="plate-spec" id="m-spec"></span>
+        </div>
+        <div class="plate-mark" id="m-mark"></div>
+      </figcaption>
+    </figure>
+  </div>
 </div>
 
 <script src="assets/openseadragon.min.js" defer></script>

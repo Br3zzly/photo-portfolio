@@ -341,7 +341,6 @@ body.lightbox-open { overflow: hidden; }
   inset: 0;
   z-index: 50;
   display: grid;
-  grid-template-rows: 1fr auto;
   opacity: 0;
   transition: opacity .28s ease;
 }
@@ -368,21 +367,67 @@ body.lightbox-open { overflow: hidden; }
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: clamp(16px, 4vh, 54px) clamp(16px, 5vw, 90px) 0;
+  padding: clamp(14px, 4vh, 48px) clamp(14px, 5vw, 84px);
   transition: padding .35s cubic-bezier(.22,.61,.36,1);
 }
 
 .lightbox.zoomed .stage { padding: 0; }
 
-.placeholder {
-  position: absolute;
-  inset: clamp(16px, 4vh, 54px) clamp(16px, 5vw, 90px) 0;
-  margin: auto;
+/* Image and plate as one object. Its size is set in JS from the photograph's
+   aspect ratio, so the plate is always exactly as wide as the image. */
+.card {
+  position: relative;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
   max-width: 100%;
   max-height: 100%;
-  object-fit: contain;
+  transition: box-shadow .35s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.10), 0 12px 44px rgba(0,0,0,.16);
+}
+
+:root[data-theme="dark"] .card,
+:root:not([data-theme="light"]) .card { box-shadow: none; }
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="light"] .card {
+    box-shadow: 0 1px 3px rgba(0,0,0,.10), 0 12px 44px rgba(0,0,0,.16);
+  }
+}
+
+.frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* zoomed: the photograph takes the whole screen and the plate steps aside */
+.lightbox.zoomed .card {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+  box-shadow: none;
+}
+
+.lightbox.zoomed .plate {
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   filter: blur(18px);
-  transform: scale(1.02);
+  transform: scale(1.04);
   opacity: 1;
   transition: opacity .45s ease .1s;
   pointer-events: none;
@@ -400,68 +445,83 @@ body.lightbox-open { overflow: hidden; }
 .viewer.ready { opacity: 1; }
 
 
-/* --- metadata ------------------------------------------------------------ */
+/* --- the plate ------------------------------------------------------------
+   Attached to the underside of the photograph, like the caption card under a
+   framed print.
+   ------------------------------------------------------------------------- */
 
-.meta {
-  position: relative;
+.plate {
+  flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
+  align-items: center;
   justify-content: space-between;
-  align-items: baseline;
-  padding: 18px clamp(16px, 5vw, 90px) clamp(20px, 4vh, 40px);
-  transition: opacity .3s ease;
+  gap: 20px;
+  padding: 13px 16px 14px;
+  background: var(--ground);
+  transition: opacity .3s ease, height .35s ease, padding .35s ease;
 }
 
-/* fades away while you are actually looking at the photograph.
-   The close button deliberately stays put -- losing the way out mid-gesture
-   feels like a trap. */
-.lightbox.interacting .meta,
-.lightbox.interacting .hint,
-.lightbox.interacting .nav { opacity: 0; pointer-events: none; }
-
-.meta-left, .meta-right {
+.plate-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  gap: 2px;
 }
 
-.meta-right { text-align: right; align-items: flex-end; }
-
-.meta-title {
-  font-size: 17px;
-  font-weight: 400;
+/* camera maker + model, bold */
+.plate-body {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.meta-caption, .meta-gear, .meta-exposure, .meta-date {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.meta-gear { font-size: 15px; color: var(--text); }
-
-.meta-caption { font-style: italic; }
-
-/* the gaps between exposure values come from here, not from spaces in the
-   text -- HTML would collapse those to a single space */
-.meta-exposure {
+/* lens, focal length, aperture, shutter, ISO -- quieter */
+.plate-spec {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 14px;
-  justify-content: flex-end;
+  gap: 0 10px;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
-.meta-date { margin-top: 1px; }
-
-@media (max-width: 620px) {
-  .meta-exposure { justify-content: flex-start; }
+/* the maker's mark, right */
+.plate-mark {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  color: var(--text);
 }
 
-.meta:empty { display: none; }
+.plate-mark img {
+  display: block;
+  height: 17px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+}
 
-@media (max-width: 620px) {
-  .meta { gap: 4px; }
-  .meta-right { text-align: left; align-items: flex-start; }
+/* fallback when no logo file exists for this maker */
+.plate-mark .wordmark {
+  font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plate:empty { display: none; }
+
+@media (max-width: 560px) {
+  .plate { padding: 10px 12px 11px; gap: 12px; }
+  .plate-body { font-size: 13.5px; }
+  .plate-spec { font-size: 11.5px; gap: 0 8px; }
+  .plate-mark .wordmark { font-size: 13px; }
+  .plate-mark img { height: 14px; }
 }
 
 
@@ -512,28 +572,6 @@ body.lightbox-open { overflow: hidden; }
   .nav { display: none; }   /* swipe instead */
 }
 
-/* sits inside the stage so it can never collide with the metadata strip */
-.hint {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
-  margin: 0;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: var(--chip);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  color: var(--muted);
-  font-size: 13px;
-  font-style: italic;
-  white-space: nowrap;
-  pointer-events: none;
-  transition: opacity .4s ease;
-}
-
-.hint.gone { opacity: 0; }
 
 
 /* --- OpenSeadragon navigator --------------------------------------------- */

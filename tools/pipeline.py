@@ -106,8 +106,8 @@ def run(args, **kwargs):
 def read_exif(src):
     """Pull the fields the metadata bar needs. Missing keys simply stay absent."""
     out = run([
-        find_tool("exiftool"), "-json", "-n" if False else "-s",
-        "-Make", "-Model", "-LensModel", "-LensID",
+        find_tool("exiftool"), "-json", "-s",
+        "-Make", "-Model", "-LensMake", "-LensModel", "-LensID",
         "-FocalLength", "-FNumber", "-ExposureTime", "-ISO",
         "-DateTimeOriginal", "-CreateDate",
         str(src),
@@ -120,13 +120,22 @@ def read_exif(src):
     def clean(v):
         return str(v).strip() if v not in (None, "") else ""
 
+    def join_make_model(mk, md):
+        """'SONY' + 'ILCE-7RM6' -> 'SONY ILCE-7RM6', without doubling the make
+        when the model already carries it (e.g. 'Viltrox 85mm F1.8')."""
+        if mk and md and not md.upper().startswith(mk.upper()):
+            return f"{mk} {md}"
+        return md or mk
+
     make = clean(raw.get("Make"))
+    # some bodies write "NIKON CORPORATION"; the wordmark is just the brand
+    make = make.replace(" CORPORATION", "").replace(" Corporation", "").strip()
     model = clean(raw.get("Model"))
-    # "SONY" + "ILCE-7RM6" -> "SONY ILCE-7RM6", but avoid "SONY SONY ..."
-    if make and model and not model.upper().startswith(make.upper()):
-        camera = f"{make} {model}"
-    else:
-        camera = model or make
+    camera = join_make_model(make, model)
+
+    lens_make = clean(raw.get("LensMake"))
+    lens_model = clean(raw.get("LensModel")) or clean(raw.get("LensID"))
+    lens = join_make_model(lens_make, lens_model)
 
     # "85.0 mm" -> "85mm", but keep "10.5mm" intact
     focal = clean(raw.get("FocalLength")).replace(" mm", "mm")
@@ -145,7 +154,9 @@ def read_exif(src):
 
     return {
         "camera": camera,
-        "lens": clean(raw.get("LensModel")) or clean(raw.get("LensID")),
+        # kept separately so the plate can show the maker's wordmark
+        "make": make,
+        "lens": lens,
         "focal": focal,
         "aperture": aperture,
         "shutter": shutter,
