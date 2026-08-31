@@ -179,6 +179,10 @@ def _render(payload):
     padding: 11px; font-weight: 600;
   }}
   .publish:hover {{ background: #fff; }}
+  .rot {{ display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }}
+  .rot button {{ font-size: 17px; line-height: 1; padding: 6px 0; }}
+  .rotlabel {{ font-size: 12px; color: {p['muted']}; min-width: 34px; text-align: center; }}
+  .stage img {{ transition: transform .2s ease; }}
   .keys {{ font-size: 11px; color: {p['muted']}; text-align: center; }}
   .done {{
     grid-column: 1 / -1; display: grid; place-items: center;
@@ -213,16 +217,22 @@ def _render(payload):
         <span class="mid" id="mid"></span>
         <button class="ghost" id="next">&rarr;</button>
       </div>
+      <div class="rot">
+        <button class="ghost" id="rotl" title="Rotate left (Shift+R)">&#8630;</button>
+        <span class="rotlabel" id="rotlabel"></span>
+        <button class="ghost" id="rotr" title="Rotate right (R)">&#8631;</button>
+      </div>
       <button class="skip" id="skip">Skip this photo</button>
       <button class="publish" id="publish"></button>
-      <div class="keys">&larr; &rarr; move &nbsp;·&nbsp; S skip &nbsp;·&nbsp; Ctrl+Enter publish</div>
+      <div class="keys">&larr; &rarr; move &nbsp;·&nbsp; R rotate &nbsp;·&nbsp; S skip &nbsp;·&nbsp; Ctrl+Enter publish</div>
     </div>
   </div>
 
 <script>
 const ROWS = {json.dumps(payload)};
 const FIELDS = {json.dumps([[k, lbl, ph] for k, lbl, ph in fields])};
-ROWS.forEach(r => {{ r.skip = false; r.data.extra = r.data.extra || {{}}; }});
+ROWS.forEach(r => {{ r.skip = false; r.data.extra = r.data.extra || {{}};
+                    r.data.rotate = r.data.rotate || 0; }});
 
 let i = 0;
 const $ = id => document.getElementById(id);
@@ -266,6 +276,7 @@ function show(n) {{
   const row = ROWS[i];
 
   $("preview").src = "/preview/" + i + ".webp";
+  applyRotation();
   // keep the neighbours warm so stepping through feels instant
   [i + 1, i - 1].forEach(j => {{
     if (j >= 0 && j < ROWS.length) new Image().src = "/preview/" + j + ".webp";
@@ -301,6 +312,28 @@ function updateCounts() {{
   $("mid").textContent = skipped ? `${{skipped}} skipped` : "";
 }}
 
+function applyRotation() {{
+  const deg = ROWS[i].data.rotate || 0;
+  const img = $("preview");
+  img.style.transform = `rotate(${{deg}}deg)`;
+  // a quarter turn swaps which axis has to fit the box
+  img.style.maxWidth  = (deg % 180) ? "none" : "100%";
+  img.style.maxHeight = (deg % 180) ? "none" : "100%";
+  if (deg % 180) {{
+    const box = $("stage").getBoundingClientRect();
+    img.style.maxWidth  = (box.height - 48) + "px";
+    img.style.maxHeight = (box.width  - 48) + "px";
+  }}
+  $("rotlabel").textContent = deg ? deg + "°" : "";
+}}
+
+function rotate(delta) {{
+  ROWS[i].data.rotate = (((ROWS[i].data.rotate || 0) + delta) % 360 + 360) % 360;
+  applyRotation();
+}}
+
+$("rotl").onclick = () => rotate(-90);
+$("rotr").onclick = () => rotate(90);
 $("prev").onclick = () => show(i - 1);
 $("next").onclick = () => show(i + 1);
 $("addx").onclick = () => $("extras").appendChild(xrow());
@@ -324,6 +357,8 @@ document.addEventListener("keydown", e => {{
   if (e.key === "ArrowRight") {{ e.preventDefault(); show(i + 1); }}
   else if (e.key === "ArrowLeft") {{ e.preventDefault(); show(i - 1); }}
   else if (e.key === "s" || e.key === "S") {{ ROWS[i].skip = !ROWS[i].skip; show(i); }}
+  else if (e.key === "r") {{ rotate(90); }}
+  else if (e.key === "R") {{ rotate(-90); }}
   else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("publish").click();
 }});
 

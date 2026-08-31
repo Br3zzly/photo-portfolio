@@ -109,9 +109,10 @@ def prepare(src, args):
         )
 
     data = existing or pipeline.init_sidecar(src, photo_id)
-    if existing:
-        # refresh dimensions in case the source was re-exported
-        data["width"], data["height"] = pipeline.dimensions(src)
+    data.setdefault("rotate", 0)
+    # dimensions are always recomputed: they depend on the orientation flag
+    # and on any rotation chosen in the review form
+    data["width"], data["height"] = pipeline.dimensions(src, data["rotate"])
 
     labels = {k: label for k, label, _ in config.METADATA_FIELDS}
     missing = [labels[k] for k in config.EXIF_FIELDS if not data.get(k)]
@@ -134,21 +135,24 @@ def finish(item, edited, args):
     """Tile, place the metadata, and write the sidecar. No interaction."""
     photo_id, src, album = item["id"], item["src"], item["album"]
 
+    rotate = int(edited.get("rotate") or 0)
     edited["id"] = photo_id
-    edited["width"] = item["data"]["width"]
-    edited["height"] = item["data"]["height"]
+    edited["width"], edited["height"] = pipeline.dimensions(src, rotate)
     if album:
         edited["album"] = album
     else:
         edited.pop("album", None)   # a photo moved out of a folder loses it
 
     t0 = time.time()
-    (count, total), cached = pipeline.make_tiles(src, photo_id, force=args.force)
+    (count, total), cached = pipeline.make_tiles(
+        src, photo_id, force=args.force, rotate=rotate)
     verb = "reused" if cached else "built"
     print(f"    {photo_id}: {verb} {count} tiles, {human(total)} "
           f"in {time.time()-t0:.1f}s")
 
-    edited["lqip"] = pipeline.make_lqip(src)
+    # the thumbnail was built before you chose a rotation, so redo it
+    pipeline.make_thumb(src, photo_id, force=True, rotate=rotate)
+    edited["lqip"] = pipeline.make_lqip(src, rotate=rotate)
     pipeline.save_sidecar(photo_id, edited)
     return edited
 

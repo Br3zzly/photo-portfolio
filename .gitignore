@@ -28,3 +28,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# originals moved aside by tools/unpublish.py
+archive/

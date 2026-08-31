@@ -188,15 +188,52 @@ def has_gps(src):
 
 # --- image derivatives ------------------------------------------------------
 
-def dimensions(src):
+def dimensions(src, rotate=0):
+    """Dimensions as the photograph will actually be published."""
     # vipsheader is its own binary; `vips header` is not a valid action
     vh = find_tool("vipsheader")
     w = int(run([vh, "-f", "width", str(src)]).strip())
     h = int(run([vh, "-f", "height", str(src)]).strip())
+    if orientation_swaps_axes(src):
+        w, h = h, w
+    if rotate in (90, 270):
+        w, h = h, w
     return w, h
 
 
-def make_tiles(src, photo_id, force=False):
+def orientation_swaps_axes(src):
+    """True when the EXIF orientation flag turns a landscape file portrait."""
+    out = run([find_tool("exiftool"), "-s", "-s", "-s", "-n", "-Orientation", str(src)])
+    try:
+        # 5..8 are the transposed orientations
+        return int(out.strip()) >= 5
+    except ValueError:
+        return False
+
+
+def _source(src, rotate=0):
+    """
+    A vips input specification honouring EXIF orientation.
+
+    dzsave does not apply the orientation flag on its own -- only `thumbnail`
+    does -- so tiles came out sideways for any photo the camera tagged as
+    rotated. The [autorotate] loader option fixes that at load time, with no
+    re-encode of the original.
+
+    A manual rotation on top needs a real pass, so it goes through an
+    uncompressed temporary in vips' own format: fast, and lossless.
+    """
+    spec = f"{src}[autorotate]"
+    if not rotate:
+        return spec, None
+
+    TILES_DIR.mkdir(exist_ok=True)
+    tmp = TILES_DIR / f".rot-{os.getpid()}-{Path(src).stem}.v"
+    run([find_tool("vips"), "rot", spec, str(tmp), f"d{rotate}"])
+    return str(tmp), tmp
+
+
+def make_tiles(src, photo_id, force=False, rotate=0):
     """Build the DeepZoom pyramid. Returns (tile_count, total_bytes)."""
     TILES_DIR.mkdir(exist_ok=True)
     # photo_id may be "Album/name", so make the album subfolder too
@@ -211,12 +248,17 @@ def make_tiles(src, photo_id, force=False):
         shutil.rmtree(files_dir)
     dzi.unlink(missing_ok=True)
 
-    run([
-        find_tool("vips"), "dzsave", str(src), str(TILES_DIR / photo_id),
-        "--tile-size", str(config.TILE_SIZE),
-        "--overlap", str(config.OVERLAP),
-        "--suffix", f".webp[Q={config.TILE_QUALITY}]",
-    ])
+    spec, tmp = _source(src, rotate)
+    try:
+        run([
+            find_tool("vips"), "dzsave", spec, str(TILES_DIR / photo_id),
+            "--tile-size", str(config.TILE_SIZE),
+            "--overlap", str(config.OVERLAP),
+            "--suffix", f".webp[Q={config.TILE_QUALITY}]",
+        ])
+    finally:
+        if tmp:
+            tmp.unlink(missing_ok=True)
     return _tile_stats(files_dir), False
 
 
@@ -229,7 +271,7 @@ def _tile_stats(files_dir):
     return count, total
 
 
-def make_thumb(src, photo_id, force=False):
+def make_thumb(src, photo_id, force=False, rotate=0):
     THUMBS_DIR.mkdir(exist_ok=True)
     (THUMBS_DIR / photo_id).parent.mkdir(parents=True, exist_ok=True)
     dest = THUMBS_DIR / f"{photo_id}.webp"
@@ -237,22 +279,34 @@ def make_thumb(src, photo_id, force=False):
         return dest
     # keep=icc drops EXIF/XMP but preserves the colour profile. Without this,
     # vips copies the source's ~100KB of metadata into every thumbnail.
-    run([
-        find_tool("vips"), "thumbnail", str(src),
-        f"{dest}[Q={config.THUMB_QUALITY},keep=icc]", str(config.THUMB_WIDTH),
-    ])
+    # `thumbnail` already applies the orientation flag; _source only matters
+    # for a manual rotation on top of it
+    spec, tmp = _source(src, rotate)
+    try:
+        run([
+            find_tool("vips"), "thumbnail", spec,
+            f"{dest}[Q={config.THUMB_QUALITY},keep=icc]", str(config.THUMB_WIDTH),
+        ])
+    finally:
+        if tmp:
+            tmp.unlink(missing_ok=True)
     return dest
 
 
-def make_lqip(src):
+def make_lqip(src, rotate=0):
     """A tiny blurred placeholder, returned as a data: URI for inlining."""
     tmp = TILES_DIR / f".lqip-tmp.webp"
     TILES_DIR.mkdir(exist_ok=True)
     # keep=none: at 24px a colour profile would outweigh the image itself
-    run([
-        find_tool("vips"), "thumbnail", str(src),
-        f"{tmp}[Q=40,keep=none]", str(config.LQIP_WIDTH),
-    ])
+    spec, rot_tmp = _source(src, rotate)
+    try:
+        run([
+            find_tool("vips"), "thumbnail", spec,
+            f"{tmp}[Q=40,keep=none]", str(config.LQIP_WIDTH),
+        ])
+    finally:
+        if rot_tmp:
+            rot_tmp.unlink(missing_ok=True)
     data = tmp.read_bytes()
     tmp.unlink(missing_ok=True)
     return "data:image/webp;base64," + base64.b64encode(data).decode("ascii")
