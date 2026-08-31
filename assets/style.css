@@ -1,15 +1,21 @@
 /* ---------------------------------------------------------------------------
-   Darkroom palette. Warm near-blacks, never pure #000 or #fff, so photographs
-   read as prints under gallery light rather than images on a dark UI.
+   Two palettes. Dark is true black, which is what OLED phones actually turn
+   off pixels for. Light is warm paper rather than inverted dark, so the
+   gallery reads like white walls instead of a UI with the lights flipped.
    --------------------------------------------------------------------------- */
 
+/* Light is the base. Dark overrides follow, once for the system preference
+   and once for an explicit choice, so the toggle wins in both directions. */
 :root {
-  --ground:    #131211;
-  --raised:    #1C1A18;
-  --hairline:  #2E2A26;
-  --text:      #EDE9E3;
-  --muted:     #9A928A;
-  --safelight: #C4553D;
+  --ground:    #FFFFFF;
+  --raised:    #F4F3F1;
+  --hairline:  #E3E0DB;
+  --text:      #14120F;
+  --muted:     #6E6862;
+  --safelight: #B04A33;
+  --scrim:     rgba(255, 255, 255, .78);
+  --chip:      rgba(255, 255, 255, .72);
+  --shade:     0.97;      /* resting brightness on thumbnails */
 
   --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
 
@@ -17,7 +23,42 @@
   --row: 300px;          /* target row height in the justified grid */
   --pad: clamp(20px, 4vw, 56px);
 
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:    #000000;
+    --raised:    #0D0D0D;
+    --hairline:  #262626;
+    --text:      #F5F3F0;
+    --muted:     #8C8C8C;
+    --safelight: #C4553D;
+    --scrim:     rgba(0, 0, 0, .78);
+    --chip:      rgba(0, 0, 0, .55);
+    --shade:     0.92;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:    #000000;
+  --raised:    #0D0D0D;
+  --hairline:  #262626;
+  --text:      #F5F3F0;
+  --muted:     #8C8C8C;
+  --safelight: #C4553D;
+  --scrim:     rgba(0, 0, 0, .78);
+  --chip:      rgba(0, 0, 0, .55);
+  --shade:     0.92;
   color-scheme: dark;
+}
+
+/* only after the first paint, so switching does not flash the whole page */
+:root.theme-ready body,
+:root.theme-ready .lightbox-scrim,
+:root.theme-ready .tile img {
+  transition: background-color .35s ease, color .35s ease, filter .35s ease;
 }
 
 * { box-sizing: border-box; }
@@ -113,18 +154,143 @@ body.lightbox-open { overflow: hidden; }
   background-position: center;
   opacity: 0;
   transition: opacity .5s ease, filter .5s ease;
-  filter: brightness(0.92);
+  filter: brightness(var(--shade));
 }
 
 .tile img.ready { opacity: 1; }
 
 @media (hover: hover) {
-  .tile:hover img { filter: brightness(1.04); }
+  .tile:hover img { filter: brightness(1); }
 }
 
 .tile:focus-visible {
   outline: 2px solid var(--safelight);
   outline-offset: 3px;
+}
+
+
+/* --- album tiles ---------------------------------------------------------
+   An album sits in the same grid as a photograph, distinguished only by its
+   name in the corner and a slight darkening so the label stays readable.
+   ------------------------------------------------------------------------- */
+
+.tile.album { cursor: pointer; }
+
+.tile.album::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,.45) 0%,
+    rgba(0,0,0,.12) 38%,
+    rgba(0,0,0,0) 70%
+  );
+  pointer-events: none;
+  transition: opacity .35s ease;
+}
+
+@media (hover: hover) {
+  .tile.album:hover::after { opacity: .75; }
+}
+
+.album-label {
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 2;
+  padding: 12px 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0,0,0,.5);
+  pointer-events: none;
+}
+
+.album-name {
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.album-count {
+  font-size: 13px;
+  opacity: .78;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* --- album view ---------------------------------------------------------- */
+
+.album-head {
+  padding: clamp(30px, 6vw, 68px) var(--pad) clamp(20px, 3vw, 34px);
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
+.album-head h2 {
+  margin: 0;
+  font-size: clamp(26px, 4.2vw, 42px);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.album-head .album-sub {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 16px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.back:hover { color: var(--text); }
+.back:focus-visible { outline: 2px solid var(--safelight); outline-offset: 3px; }
+
+
+/* --- theme toggle -------------------------------------------------------- */
+
+.theme-toggle {
+  position: fixed;
+  top: clamp(14px, 2.4vw, 24px);
+  right: clamp(14px, 2.4vw, 24px);
+  z-index: 60;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--chip);
+  color: var(--text);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: border-color .2s ease, color .2s ease;
+}
+
+.theme-toggle:hover { border-color: var(--muted); }
+.theme-toggle:focus-visible { outline: 2px solid var(--safelight); outline-offset: 2px; }
+
+/* one icon per theme; only the relevant one is shown */
+.theme-toggle .sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .moon { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .sun  { display: block; }
+  :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
 }
 
 /* On a phone a justified row has no room to justify. One photograph per row,
@@ -186,7 +352,7 @@ body.lightbox-open { overflow: hidden; }
 .lightbox-scrim {
   position: absolute;
   inset: 0;
-  background: rgba(19, 18, 17, 0.82);
+  background: var(--scrim);
   -webkit-backdrop-filter: blur(28px) saturate(0.7);
   backdrop-filter: blur(28px) saturate(0.7);
 }
@@ -306,7 +472,7 @@ body.lightbox-open { overflow: hidden; }
   z-index: 3;
   display: grid;
   place-items: center;
-  background: rgba(28, 26, 24, 0.72);
+  background: var(--chip);
   color: var(--text);
   border: 1px solid var(--hairline);
   border-radius: 999px;
@@ -317,7 +483,7 @@ body.lightbox-open { overflow: hidden; }
 }
 
 .close:hover, .nav:hover {
-  background: rgba(46, 42, 38, 0.9);
+  background: var(--raised);
   border-color: var(--muted);
 }
 
@@ -356,7 +522,7 @@ body.lightbox-open { overflow: hidden; }
   margin: 0;
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(19, 18, 17, .6);
+  background: var(--chip);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   color: var(--muted);
@@ -376,7 +542,7 @@ body.lightbox-open { overflow: hidden; }
 
 .openseadragon-container .navigator {
   border: 1px solid var(--hairline) !important;
-  background: rgba(19, 18, 17, .8) !important;
+  background: var(--raised) !important;
   border-radius: 2px;
 }
 

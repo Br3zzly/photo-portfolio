@@ -33,6 +33,28 @@ def human(n):
     return f"{n:.1f} TB"
 
 
+def photo_id_for(src):
+    """
+    A subfolder of photos/ is an album, and its name becomes part of the id:
+
+        photos/sunset.jpg        -> "sunset"          (no album)
+        photos/Kyoto/temple.jpg  -> "Kyoto/temple"    (album "Kyoto")
+
+    Keeping the album in the id means two albums can both hold a DSC01234.jpg
+    without colliding, in the manifest or in the bucket.
+    """
+    src = Path(src).resolve()
+    try:
+        rel = src.relative_to(PHOTOS_DIR.resolve())
+    except ValueError:
+        return src.stem, ""          # a file from outside photos/
+
+    if len(rel.parts) == 1:
+        return rel.stem, ""
+    album = rel.parts[0]
+    return f"{album}/{rel.stem}", album
+
+
 def find_sources(args):
     if args.paths:
         out = []
@@ -46,16 +68,24 @@ def find_sources(args):
     if not PHOTOS_DIR.is_dir():
         sys.exit(f"  no photos/ directory at {PHOTOS_DIR}")
 
-    return sorted(
+    # loose photos first, then each album folder in name order
+    loose = sorted(
         p for p in PHOTOS_DIR.iterdir()
         if p.suffix.lower() in SOURCE_TYPES and p.is_file()
     )
+    grouped = []
+    for folder in sorted(d for d in PHOTOS_DIR.iterdir() if d.is_dir()):
+        grouped.extend(sorted(
+            p for p in folder.iterdir()
+            if p.suffix.lower() in SOURCE_TYPES and p.is_file()
+        ))
+    return loose + grouped
 
 
 def process_one(src, args):
     """Returns the sidecar dict, or None if the user cancelled."""
-    photo_id = src.stem
-    print(f"\n  {src.name}")
+    photo_id, album = photo_id_for(src)
+    print(f"\n  {photo_id}" + (f"   [album: {album}]" if album else ""))
 
     existing = pipeline.load_sidecar(photo_id)
     tiles_exist = (TILES_DIR / f"{photo_id}.dzi").exists()
@@ -102,6 +132,10 @@ def process_one(src, args):
 
     edited["id"] = photo_id
     edited["width"], edited["height"] = data["width"], data["height"]
+    if album:
+        edited["album"] = album
+    else:
+        edited.pop("album", None)   # a photo moved out of a folder loses it
 
     print("    tiling...")
     t0 = time.time()
@@ -118,7 +152,7 @@ def process_one(src, args):
 def build_manifest():
     """The manifest is generated from the sidecars, which are the real source."""
     photos = []
-    for sidecar in sorted(PHOTOS_DIR.glob("*.json")):
+    for sidecar in sorted(PHOTOS_DIR.rglob("*.json")):
         data = json.loads(sidecar.read_text(encoding="utf-8"))
         if not (TILES_DIR / f"{data['id']}.dzi").exists():
             continue
@@ -126,7 +160,35 @@ def build_manifest():
 
     # newest first; photos without a date sort last
     photos.sort(key=lambda d: d.get("date") or "", reverse=True)
-    return {"photos": photos, "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+    # One entry per album folder. The cover is the album's newest photo, which
+    # is simply the first one to appear after the sort above.
+    albums = []
+    for photo in photos:
+        name = photo.get("album")
+        if not name:
+            continue
+        existing = next((a for a in albums if a["name"] == name), None)
+        if existing:
+            existing["count"] += 1
+        else:
+            albums.append({
+                "name": name,
+                "cover": photo["id"],
+                "coverWidth": photo.get("width"),
+                "coverHeight": photo.get("height"),
+                "coverLqip": photo.get("lqip", ""),
+                "count": 1,
+                "date": photo.get("date", ""),
+            })
+
+    albums.sort(key=lambda a: a.get("date") or "", reverse=True)
+
+    return {
+        "photos": photos,
+        "albums": albums,
+        "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
 
 
 def upload(ids):

@@ -20,10 +20,36 @@ const hint        = el("hint");
 const prevBtn     = el("prev");
 const nextBtn     = el("next");
 
-let photos = [];
-let index = -1;      // which photo is open; -1 means the gallery
+let photos = [];     // every published photo, newest first
+let albums = [];     // one entry per folder under photos/
+let shown = [];      // the photos the current view is showing, in order
+let album = null;    // album name when viewing one, otherwise null
+let index = -1;      // index into `shown`; -1 means no photo is open
 let viewer = null;   // the OpenSeadragon instance, created once and reused
 let idleTimer = null;
+
+
+/* --- theme ---------------------------------------------------------------
+   Follows the system until the visitor chooses, then remembers the choice.
+   The <head> script has already applied any saved value.
+   ------------------------------------------------------------------------- */
+
+function currentTheme() {
+  const explicit = document.documentElement.getAttribute("data-theme");
+  if (explicit) return explicit;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+el("theme-toggle").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("theme", next); } catch (e) { /* private mode */ }
+});
+
+// enable colour transitions only after first paint
+requestAnimationFrame(() =>
+  document.documentElement.classList.add("theme-ready")
+);
 
 
 /* --- boot ---------------------------------------------------------------- */
@@ -36,6 +62,7 @@ async function init() {
     if (!res.ok) throw new Error(`manifest returned ${res.status}`);
     const data = await res.json();
     photos = Array.isArray(data) ? data : data.photos || [];
+    albums = (Array.isArray(data) ? [] : data.albums) || [];
   } catch (err) {
     status.textContent =
       "Could not load the gallery. If this keeps happening the image host may be unreachable.";
@@ -50,63 +77,158 @@ async function init() {
   }
 
   status.hidden = true;
-  renderGrid();
-  countEl.textContent =
-    `${photos.length} photograph${photos.length === 1 ? "" : "s"}`;
+  window.addEventListener("popstate", route);
+  route({ replace: true });
+}
 
-  // a deep link like ?id=test must work pasted cold
-  const wanted = new URLSearchParams(location.search).get("id");
-  if (wanted) {
-    const i = photos.findIndex((p) => p.id === wanted);
-    if (i >= 0) open(i, { replace: true });
+
+/* --- routing -------------------------------------------------------------
+   Three states, all expressible as a URL so any of them can be shared:
+     /                -> everything
+     ?album=Kyoto     -> one album
+     ?id=Kyoto/temple -> a photo, opened over whichever view it belongs to
+   ------------------------------------------------------------------------- */
+
+function route() {
+  const params = new URLSearchParams(location.search);
+  const wantedId = params.get("id");
+  const wantedAlbum = params.get("album") ||
+    (wantedId && wantedId.includes("/") ? wantedId.split("/")[0] : null);
+
+  showView(wantedAlbum);
+
+  if (wantedId) {
+    const i = shown.findIndex((p) => p.id === wantedId);
+    if (i >= 0) { openAt(i); return; }
+  }
+  closeLightbox();
+}
+
+let renderedFor = undefined;   // which album the grid currently shows
+
+function showView(name) {
+  album = name && albums.some((a) => a.name === name) ? name : null;
+
+  // Re-rendering on every route change would reset the scroll position every
+  // time a photo is closed. Only rebuild when the view actually changed.
+  if (renderedFor === album) return;
+  renderedFor = album;
+
+  if (album) {
+    shown = photos.filter((p) => p.album === album);
+    el("masthead").hidden = true;
+    el("album-head").hidden = false;
+    el("album-title").textContent = album;
+    el("album-sub").textContent =
+      `${shown.length} photograph${shown.length === 1 ? "" : "s"}`;
+  } else {
+    shown = photos.filter((p) => !p.album);
+    el("masthead").hidden = false;
+    el("album-head").hidden = true;
   }
 
-  window.addEventListener("popstate", onPopState);
+  renderGrid();
+
+  const total = album ? shown.length : photos.length;
+  countEl.textContent =
+    `${total} photograph${total === 1 ? "" : "s"}` +
+    (!album && albums.length ? ` in ${albums.length} album${albums.length === 1 ? "" : "s"}` : "");
+}
+
+function go(url) {
+  history.pushState({}, "", url);
+  route();
 }
 
 
 /* --- gallery ------------------------------------------------------------- */
 
 function renderGrid() {
+  grid.replaceChildren();
   const frag = document.createDocumentFragment();
 
-  photos.forEach((photo, i) => {
-    const ar = (photo.width || 3) / (photo.height || 2);
+  // On the home view, albums sit in the same grid as loose photographs.
+  if (!album) {
+    albums.forEach((a) => frag.appendChild(albumTile(a)));
+  }
 
-    const tile = document.createElement("button");
-    tile.className = "tile";
-    tile.style.setProperty("--ar", ar.toFixed(4));
-    tile.setAttribute("role", "listitem");
-    tile.setAttribute("aria-label", photo.title || photo.id);
-
-    const img = document.createElement("img");
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.width = photo.width || 0;
-    img.height = photo.height || 0;
-    img.alt = photo.title || "";
-    // the inlined placeholder paints immediately, so tiles are never empty
-    if (photo.lqip) img.style.backgroundImage = `url("${photo.lqip}")`;
-    img.src = `${BUCKET}/thumbs/${photo.id}.webp`;
-
-    const reveal = () => img.classList.add("ready");
-    if (img.complete) reveal();
-    else img.addEventListener("load", reveal, { once: true });
-
-    tile.appendChild(img);
-    tile.addEventListener("click", () => open(i));
-    frag.appendChild(tile);
-  });
-
+  shown.forEach((photo, i) => frag.appendChild(photoTile(photo, i)));
   grid.appendChild(frag);
+  window.scrollTo({ top: 0 });
+}
+
+function tileShell(ar, label) {
+  const tile = document.createElement("button");
+  tile.className = "tile";
+  tile.style.setProperty("--ar", ar.toFixed(4));
+  tile.setAttribute("role", "listitem");
+  tile.setAttribute("aria-label", label);
+  return tile;
+}
+
+function thumbImg(id, w, h, lqip, alt) {
+  const img = document.createElement("img");
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.width = w || 0;
+  img.height = h || 0;
+  img.alt = alt || "";
+  // the inlined placeholder paints immediately, so tiles are never empty
+  if (lqip) img.style.backgroundImage = `url("${lqip}")`;
+  img.src = `${BUCKET}/thumbs/${id}.webp`;
+
+  const reveal = () => img.classList.add("ready");
+  if (img.complete) reveal();
+  else img.addEventListener("load", reveal, { once: true });
+  return img;
+}
+
+function photoTile(photo, i) {
+  const ar = (photo.width || 3) / (photo.height || 2);
+  const tile = tileShell(ar, photo.title || photo.id);
+  tile.appendChild(
+    thumbImg(photo.id, photo.width, photo.height, photo.lqip, photo.title)
+  );
+  tile.addEventListener("click", () => {
+    openAt(i);
+    history.pushState({}, "", `${location.pathname}?id=${encodeURIComponent(photo.id)}`);
+  });
+  return tile;
+}
+
+function albumTile(a) {
+  const ar = (a.coverWidth || 3) / (a.coverHeight || 2);
+  const tile = tileShell(ar, `Album: ${a.name}`);
+  tile.classList.add("album");
+  tile.appendChild(
+    thumbImg(a.cover, a.coverWidth, a.coverHeight, a.coverLqip, "")
+  );
+
+  const label = document.createElement("span");
+  label.className = "album-label";
+  const name = document.createElement("span");
+  name.className = "album-name";
+  name.textContent = a.name;
+  const count = document.createElement("span");
+  count.className = "album-count";
+  count.textContent = a.count;
+  label.append(name, count);
+  tile.appendChild(label);
+
+  tile.addEventListener("click", () =>
+    go(`${location.pathname}?album=${encodeURIComponent(a.name)}`)
+  );
+  return tile;
 }
 
 
 /* --- lightbox ------------------------------------------------------------ */
 
-function open(i, { replace = false } = {}) {
-  if (i < 0 || i >= photos.length) return;
-  const photo = photos[i];
+/* Opens a photo from the current view. Prev/next therefore walk the album you
+   are in, not the whole collection. */
+function openAt(i) {
+  if (i < 0 || i >= shown.length) return;
+  const photo = shown[i];
   index = i;
 
   lightbox.hidden = false;
@@ -120,20 +242,18 @@ function open(i, { replace = false } = {}) {
 
   fillMeta(photo);
   prevBtn.disabled = i === 0;
-  nextBtn.disabled = i === photos.length - 1;
+  nextBtn.disabled = i === shown.length - 1;
 
   hint.classList.remove("gone");
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => hint.classList.add("gone"), 3200);
 
   showTiles(photo);
-
-  const url = `${location.pathname}?id=${encodeURIComponent(photo.id)}`;
-  if (replace) history.replaceState({ id: photo.id }, "", url);
-  else history.pushState({ id: photo.id }, "", url);
 }
 
-function close() {
+/* Tears the lightbox down without touching history. */
+function closeLightbox() {
+  if (index < 0) return;
   index = -1;
   lightbox.classList.remove("open", "zoomed", "interacting");
   document.body.classList.remove("lightbox-open");
@@ -141,15 +261,20 @@ function close() {
     lightbox.hidden = true;
     if (viewer) viewer.close();
   }, 280);
+}
 
-  if (new URLSearchParams(location.search).get("id")) {
-    history.pushState({}, "", location.pathname);
-  }
+/* The close button goes back to whichever view the photo came from. */
+function close() {
+  go(album
+    ? `${location.pathname}?album=${encodeURIComponent(album)}`
+    : location.pathname);
 }
 
 function step(delta) {
   const next = index + delta;
-  if (next >= 0 && next < photos.length) open(next);
+  if (next < 0 || next >= shown.length) return;
+  openAt(next);
+  history.replaceState({}, "", `${location.pathname}?id=${encodeURIComponent(shown[next].id)}`);
 }
 
 function fillMeta(photo) {
@@ -345,17 +470,4 @@ stage.addEventListener("touchend", (e) => {
   }
 }, { passive: true });
 
-function onPopState() {
-  const id = new URLSearchParams(location.search).get("id");
-  if (!id) {
-    if (index >= 0) {
-      index = -1;
-      lightbox.classList.remove("open", "zoomed", "interacting");
-      document.body.classList.remove("lightbox-open");
-      setTimeout(() => { lightbox.hidden = true; if (viewer) viewer.close(); }, 280);
-    }
-    return;
-  }
-  const i = photos.findIndex((p) => p.id === id);
-  if (i >= 0 && i !== index) open(i, { replace: true });
-}
+el("back").addEventListener("click", () => go(location.pathname));

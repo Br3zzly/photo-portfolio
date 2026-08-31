@@ -188,6 +188,8 @@ def dimensions(src):
 def make_tiles(src, photo_id, force=False):
     """Build the DeepZoom pyramid. Returns (tile_count, total_bytes)."""
     TILES_DIR.mkdir(exist_ok=True)
+    # photo_id may be "Album/name", so make the album subfolder too
+    (TILES_DIR / photo_id).parent.mkdir(parents=True, exist_ok=True)
     dzi = TILES_DIR / f"{photo_id}.dzi"
     files_dir = TILES_DIR / f"{photo_id}_files"
 
@@ -218,6 +220,7 @@ def _tile_stats(files_dir):
 
 def make_thumb(src, photo_id, force=False):
     THUMBS_DIR.mkdir(exist_ok=True)
+    (THUMBS_DIR / photo_id).parent.mkdir(parents=True, exist_ok=True)
     dest = THUMBS_DIR / f"{photo_id}.webp"
     if dest.exists() and not force:
         return dest
@@ -261,6 +264,7 @@ def load_sidecar(photo_id):
 
 def save_sidecar(photo_id, data):
     p = sidecar_path(photo_id)
+    p.parent.mkdir(parents=True, exist_ok=True)
     # utf-8 with no BOM: json.loads in the browser rejects a BOM
     p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
