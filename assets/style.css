@@ -24,6 +24,7 @@
   --card-text:  #F5F3F0;
   --card-muted: #8C8C8C;
   --card-shadow: 0 2px 6px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.26);
+  --mat: clamp(10px, 1.1vw, 16px);   /* border around the photograph */
 
   --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
 
@@ -352,6 +353,9 @@ body.lightbox-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   background: var(--card-bg);
+  /* the mat runs all the way around the photograph; the plate below adds the
+     heavier bottom edge that makes it read as a mounted print */
+  padding: var(--mat) var(--mat) 0;
   max-width: 100%;
   max-height: 100%;
   /* the card takes each photograph's shape, so stepping between a portrait
@@ -413,7 +417,7 @@ body.lightbox-open { overflow: hidden; }
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 13px 16px 14px;
+  padding: 12px 0 calc(var(--mat) + 2px);
   background: var(--card-bg);
   transition: none;
 }

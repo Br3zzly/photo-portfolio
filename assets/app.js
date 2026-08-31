@@ -342,18 +342,29 @@ function sizeCard() {
   const availH = lightbox.clientHeight
     - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
 
+  // The card is border-box, so its width includes the mat around the
+  // photograph. Fit the *frame* to the aspect ratio, then add the mat and the
+  // plate back on to get the card's outer size.
+  const cc = getComputedStyle(card);
+  const matX = parseFloat(cc.paddingLeft) + parseFloat(cc.paddingRight);
+  const matY = parseFloat(cc.paddingTop) + parseFloat(cc.paddingBottom);
+
   // two passes: the plate can wrap, so its height depends on the width we pick
   let w = availW;
   for (let pass = 0; pass < 2; pass++) {
     card.style.width = `${Math.round(w)}px`;
     const plateH = plate.offsetHeight;
-    let frameH = w / ar;
-    if (frameH > availH - plateH) {
-      frameH = availH - plateH;
-      w = Math.min(availW, frameH * ar);
+
+    let frameW = w - matX;
+    let frameH = frameW / ar;
+    const roomForFrame = availH - matY - plateH;
+    if (frameH > roomForFrame) {
+      frameH = roomForFrame;
+      frameW = frameH * ar;
+      w = Math.min(availW, frameW + matX);
     }
     card.style.width = `${Math.round(w)}px`;
-    card.style.height = `${Math.round(w / ar + plateH)}px`;
+    card.style.height = `${Math.round(frameH + matY + plateH)}px`;
   }
 }
 
