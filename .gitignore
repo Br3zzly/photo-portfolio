@@ -1,10 +1,15 @@
 # Source photographs. Huge, and they are your originals -- back these up
 # somewhere real, not on GitHub.
-photos/*
+photos/**
 
-# ...except the sidecar metadata. These are small, and they are the only
-# durable copy of anything you typed into the review form by hand.
-!photos/*.json
+# ...except the sidecar metadata, at any depth. These are small, and they are
+# the only durable copy of anything you typed into the review form by hand.
+#
+# The directory rule below is load-bearing: git cannot re-include a file whose
+# parent directory is excluded, so album folders have to be un-ignored first
+# or their sidecars become unreachable.
+!photos/**/
+!photos/**/*.json
 
 # Generated. Tiles and thumbnails live in the R2 bucket; the site loads them
 # from there, so shipping them to Pages would just burn the 1 GB site limit.
