@@ -11,7 +11,6 @@ const el = (id) => document.getElementById(id);
 
 const grid        = el("grid");
 const status      = el("status");
-const countEl     = el("count");
 const lightbox    = el("lightbox");
 const stage       = el("stage");
 const placeholder = el("placeholder");
@@ -115,25 +114,14 @@ function showView(name) {
   if (renderedFor === album) return;
   renderedFor = album;
 
-  if (album) {
-    shown = photos.filter((p) => p.album === album);
-    el("masthead").hidden = true;
-    el("album-head").hidden = false;
-    el("album-title").textContent = album;
-    el("album-sub").textContent =
-      `${shown.length} photograph${shown.length === 1 ? "" : "s"}`;
-  } else {
-    shown = photos.filter((p) => !p.album);
-    el("masthead").hidden = false;
-    el("album-head").hidden = true;
-  }
+  shown = album
+    ? photos.filter((p) => p.album === album)
+    : photos.filter((p) => !p.album);
+
+  // the only chrome on the page: a way back out of an album
+  el("back").hidden = !album;
 
   renderGrid();
-
-  const total = album ? shown.length : photos.length;
-  countEl.textContent =
-    `${total} photograph${total === 1 ? "" : "s"}` +
-    (!album && albums.length ? ` in ${albums.length} album${albums.length === 1 ? "" : "s"}` : "");
 }
 
 function go(url) {

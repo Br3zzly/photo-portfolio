@@ -81,30 +81,6 @@ body {
    the blur cheap and stops it bleeding into fixed UI. */
 body.lightbox-open { overflow: hidden; }
 
-/* --- masthead ------------------------------------------------------------ */
-
-.masthead {
-  padding: clamp(48px, 9vw, 104px) var(--pad) clamp(28px, 5vw, 52px);
-  max-width: 1700px;
-  margin: 0 auto;
-}
-
-.masthead h1 {
-  margin: 0;
-  font-size: clamp(28px, 4.6vw, 46px);
-  font-weight: 400;
-  letter-spacing: -0.015em;
-  line-height: 1.1;
-}
-
-.tagline {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: clamp(15px, 1.6vw, 18px);
-  font-style: italic;
-  max-width: 46ch;
-}
-
 /* --- justified grid ------------------------------------------------------
    Each tile grows in proportion to its aspect ratio, so a row of photos fills
    the width exactly and every photograph keeps its true shape. No cards, no
@@ -115,7 +91,7 @@ body.lightbox-open { overflow: hidden; }
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap);
-  padding: 0 var(--pad) var(--pad);
+  padding: var(--pad);
   max-width: 1700px;
   margin: 0 auto;
 }
@@ -216,43 +192,34 @@ body.lightbox-open { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 
-/* --- album view ---------------------------------------------------------- */
-
-.album-head {
-  padding: clamp(30px, 6vw, 68px) var(--pad) clamp(20px, 3vw, 34px);
-  max-width: 1700px;
-  margin: 0 auto;
-}
-
-.album-head h2 {
-  margin: 0;
-  font-size: clamp(26px, 4.2vw, 42px);
-  font-weight: 400;
-  letter-spacing: -0.015em;
-}
-
-.album-head .album-sub {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-}
+/* --- back out of an album --------------------------------------------------
+   No heading, no count: the album's name is already on the tile you clicked,
+   so all that is needed is a way out.
+   --------------------------------------------------------------------------- */
 
 .back {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 16px;
-  padding: 0;
-  background: none;
-  border: 0;
-  color: var(--muted);
-  font: inherit;
-  font-size: 14px;
+  position: fixed;
+  top: clamp(14px, 2.4vw, 24px);
+  left: clamp(14px, 2.4vw, 24px);
+  z-index: 60;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--chip);
+  color: var(--text);
   cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: border-color .2s ease;
 }
 
-.back:hover { color: var(--text); }
-.back:focus-visible { outline: 2px solid var(--safelight); outline-offset: 3px; }
+.back[hidden] { display: none; }
+.back:hover { border-color: var(--muted); }
+.back:focus-visible { outline: 2px solid var(--safelight); outline-offset: 2px; }
+
 
 /* --- theme toggle -------------------------------------------------------- */
 
@@ -305,10 +272,10 @@ body.lightbox-open { overflow: hidden; }
   .tile img { object-fit: contain; }
 }
 
-/* --- status / colophon --------------------------------------------------- */
+/* --- status ------------------------------------------------------------- */
 
-.status, .colophon {
-  padding: 0 var(--pad) var(--pad);
+.status {
+  padding: var(--pad);
   max-width: 1700px;
   margin: 0 auto;
   color: var(--muted);
@@ -319,10 +286,6 @@ body.lightbox-open { overflow: hidden; }
 
 .status.error { color: var(--safelight); }
 
-.colophon {
-  padding-top: 40px;
-  padding-bottom: 60px;
-}
 
 /* --- lightbox ------------------------------------------------------------
    Opens over the live gallery, which is blurred in place. That keeps the two
