@@ -94,15 +94,25 @@ def remove(photo_id, keep_original):
 
 
 def purge_remote(ids):
-    """Delete the tiles and thumbnails from R2."""
+    """
+    Delete the tiles and thumbnails from R2.
+
+    This is by far the slowest part -- a photo is a few hundred objects, so a
+    big removal is thousands of API calls and takes minutes. It reports every
+    photo as it goes, because a silent multi-minute pause is indistinguishable
+    from a hang.
+    """
     rclone = find_tool("rclone")
     dest = f"{config.R2_REMOTE}:{config.R2_BUCKET}"
-    for photo_id in ids:
-        for path in (f"{photo_id}_files", ):
-            try:
-                run([rclone, "purge", f"{dest}/{path}", "--s3-no-check-bucket"])
-            except RuntimeError:
-                pass          # already gone
+    total = len(ids)
+
+    for n, photo_id in enumerate(ids, 1):
+        print(f"    [{n}/{total}] {photo_id}", flush=True)
+        try:
+            run([rclone, "purge", f"{dest}/{photo_id}_files",
+                 "--transfers", "48", "--checkers", "48", "--s3-no-check-bucket"])
+        except RuntimeError:
+            pass          # already gone
         for path in (f"{photo_id}.dzi", f"thumbs/{photo_id}.webp"):
             try:
                 run([rclone, "deletefile", f"{dest}/{path}", "--s3-no-check-bucket"])

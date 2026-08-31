@@ -78,6 +78,23 @@ for about ten minutes and your change will look like it did not work.
 Dark by default if that is your system setting, light otherwise. The toggle in
 the corner overrides it and the choice is remembered per browser.
 
+## Removing photographs
+
+```bash
+python tools/unpublish.py LL_06601
+python tools/unpublish.py "LL_066*"        # patterns work
+python tools/unpublish.py "LL_066*" --yes  # skip the confirmation
+```
+
+Deletes the tiles and thumbnail locally and from the bucket, drops the
+sidecar, refreshes the manifest, and moves your original into `archive/` --
+otherwise the next publish run would simply put it back. Nothing you shot is
+ever deleted. Move the file back into `photos/` and publish again to undo.
+
+Removing a lot at once is slow: each photo is a few hundred objects in the
+bucket, so expect a minute or two per few thousand. It prints progress as it
+goes.
+
 ## Requirements
 
 ```bash
