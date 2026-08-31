@@ -1,10 +1,10 @@
 """
-The metadata review step: opens a local page showing the photo alongside its
-metadata, lets you correct or fill anything, and waits for you to confirm.
+The metadata review step: one page, one tab, however many photos.
 
-The server exists only while you have the form open and shuts itself down the
-moment you press Confirm or Cancel. Nothing about the published site depends
-on it.
+You walk the queue with the arrow keys, correct anything the camera did not
+record, mark the frames you do not want, and publish the rest in one go. The
+server exists only while the page is open and shuts down as soon as you are
+done. Nothing about the published site depends on it.
 """
 
 import http.server
@@ -17,12 +17,13 @@ from pathlib import Path
 import config
 
 PALETTE = {
-    "ground": "#131211",
-    "raised": "#1C1A18",
-    "hairline": "#2E2A26",
-    "text": "#EDE9E3",
-    "muted": "#9A928A",
+    "ground": "#0B0B0B",
+    "raised": "#151515",
+    "hairline": "#2A2A2A",
+    "text": "#F2F0ED",
+    "muted": "#8B8B8B",
     "accent": "#C4553D",
+    "good": "#6E9E78",
 }
 
 
@@ -32,18 +33,29 @@ def _free_port():
         return s.getsockname()[1]
 
 
-def review(data, thumb_path, warnings=None, open_browser=True):
+def review_all(items, open_browser=True):
     """
-    Show the form. Returns the edited dict, or None if the user cancelled.
+    items: [{"id":..., "data": {...}, "thumb": Path, "warnings": [...]}]
+
+    Returns a dict of id -> edited data for the photos you chose to publish.
+    Photos you skipped are absent. Returns None if you cancelled outright.
     """
-    warnings = warnings or []
-    result = {"data": None, "done": threading.Event()}
-    thumb_bytes = Path(thumb_path).read_bytes()
-    page = _render(data, warnings).encode("utf-8")
+    if not items:
+        return {}
+
+    thumbs = [Path(it["thumb"]).read_bytes() for it in items]
+    payload = [
+        {"id": it["id"], "album": it.get("album", ""),
+         "data": it["data"], "warnings": it.get("warnings", [])}
+        for it in items
+    ]
+    page = _render(payload).encode("utf-8")
+
+    result = {"out": None, "done": threading.Event()}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
-            pass  # keep the terminal clean
+            pass
 
         def _send(self, code, body, ctype):
             self.send_response(code)
@@ -54,18 +66,25 @@ def review(data, thumb_path, warnings=None, open_browser=True):
             self.wfile.write(body)
 
         def do_GET(self):
-            if self.path.startswith("/preview"):
-                self._send(200, thumb_bytes, "image/webp")
+            if self.path.startswith("/preview/"):
+                try:
+                    i = int(self.path.split("/")[-1].split(".")[0])
+                    self._send(200, thumbs[i], "image/webp")
+                except (ValueError, IndexError):
+                    self._send(404, b"", "text/plain")
             elif self.path == "/" or self.path.startswith("/?"):
                 self._send(200, page, "text/html; charset=utf-8")
             else:
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            length = int(self.headers.get("Content-Length", 0))
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if payload.get("action") == "confirm":
-                result["data"] = payload.get("data")
+            n = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(n).decode("utf-8"))
+            if body.get("action") == "publish":
+                result["out"] = {
+                    row["id"]: row["data"]
+                    for row in body.get("rows", []) if not row.get("skip")
+                }
             self._send(200, b'{"ok":true}', "application/json")
             result["done"].set()
 
@@ -74,7 +93,7 @@ def review(data, thumb_path, warnings=None, open_browser=True):
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     url = f"http://127.0.0.1:{port}/"
-    print(f"  review form: {url}", flush=True)
+    print(f"  review {len(items)} photo(s): {url}", flush=True)
     if open_browser:
         webbrowser.open(url)
 
@@ -85,189 +104,230 @@ def review(data, thumb_path, warnings=None, open_browser=True):
     finally:
         server.shutdown()
 
-    return result["data"]
+    return result["out"]
 
 
-def _render(data, warnings):
+def _render(payload):
     p = PALETTE
-    fields_html = []
-    for key, label, placeholder in config.METADATA_FIELDS:
-        value = str(data.get(key, "") or "")
-        missing = " missing" if not value else ""
-        fields_html.append(f"""
-      <label class="field{missing}">
-        <span class="label">{label}</span>
-        <input name="{key}" value="{_esc(value)}" placeholder="{_esc(placeholder)}" autocomplete="off">
-      </label>""")
-
-    extra = data.get("extra") or {}
-    extra_rows = "".join(
-        f'<div class="extra-row"><input class="ek" value="{_esc(k)}" placeholder="name">'
-        f'<input class="ev" value="{_esc(str(v))}" placeholder="value">'
-        f'<button type="button" class="rm">remove</button></div>'
-        for k, v in extra.items()
-    )
-
-    warn_html = ""
-    if warnings:
-        items = "".join(f"<li>{_esc(w)}</li>" for w in warnings)
-        warn_html = f'<div class="warn"><ul>{items}</ul></div>'
-
-    missing_count = sum(1 for k, _, _ in config.METADATA_FIELDS if not data.get(k))
-    subtitle = (
-        f"{missing_count} field{'s' if missing_count != 1 else ''} empty"
-        if missing_count else "all fields present"
-    )
-
+    fields = config.METADATA_FIELDS
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Review — {_esc(data.get('id',''))}</title>
+<title>Review {len(payload)} photos</title>
 <style>
   :root {{ color-scheme: dark; }}
   * {{ box-sizing: border-box; }}
   body {{
-    margin: 0; min-height: 100vh; background: {p['ground']}; color: {p['text']};
-    font: 15px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
-    display: grid; grid-template-columns: minmax(0,1fr) 460px;
+    margin: 0; height: 100vh; overflow: hidden;
+    background: {p['ground']}; color: {p['text']};
+    font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+    display: grid; grid-template-columns: minmax(0,1fr) 420px;
   }}
-  @media (max-width: 900px) {{ body {{ grid-template-columns: 1fr; }} }}
+  @media (max-width: 940px) {{ body {{ grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }} }}
 
-  .preview {{
-    position: sticky; top: 0; height: 100vh; padding: 32px;
-    display: grid; place-items: center; background: {p['ground']};
+  .stage {{ position: relative; display: grid; place-items: center; padding: 24px; min-width: 0; }}
+  .stage img {{ max-width: 100%; max-height: 100%; object-fit: contain; display: block; }}
+  .stage.skipped img {{ opacity: .25; filter: grayscale(1); }}
+  .skipbadge {{
+    position: absolute; top: 20px; left: 20px; display: none;
+    background: {p['accent']}; color: #fff; padding: 4px 10px;
+    border-radius: 3px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
   }}
-  .preview img {{
-    max-width: 100%; max-height: calc(100vh - 64px);
-    object-fit: contain; display: block;
-  }}
+  .stage.skipped .skipbadge {{ display: block; }}
 
   .panel {{
-    padding: 40px 36px 120px; border-left: 1px solid {p['hairline']};
-    background: {p['raised']}; overflow-y: auto; max-height: 100vh;
+    border-left: 1px solid {p['hairline']}; background: {p['raised']};
+    display: flex; flex-direction: column; min-height: 0;
   }}
-  h1 {{ font-size: 20px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; }}
-  .sub {{ color: {p['muted']}; font-size: 13px; margin-bottom: 26px; }}
+  .head {{ padding: 18px 22px 12px; border-bottom: 1px solid {p['hairline']}; }}
+  .counter {{ font-size: 12px; color: {p['muted']}; }}
+  .fname {{ font-size: 16px; font-weight: 600; margin-top: 2px; word-break: break-all; }}
+  .album {{ font-size: 12px; color: {p['muted']}; margin-top: 2px; }}
 
+  .bar {{ height: 3px; background: {p['hairline']}; margin-top: 12px; border-radius: 2px; overflow: hidden; }}
+  .bar > i {{ display: block; height: 100%; background: {p['text']}; transition: width .2s ease; }}
+
+  .body {{ padding: 16px 22px; overflow-y: auto; flex: 1; }}
   .warn {{
-    border-left: 2px solid {p['accent']}; background: rgba(196,85,61,.09);
-    padding: 10px 14px; margin-bottom: 24px; font-size: 13px; color: {p['text']};
+    border-left: 2px solid {p['accent']}; background: rgba(196,85,61,.1);
+    padding: 8px 12px; margin-bottom: 16px; font-size: 12.5px;
   }}
-  .warn ul {{ margin: 0; padding-left: 16px; }}
-
-  .field {{ display: block; margin-bottom: 16px; }}
-  .label {{
-    display: block; font-size: 12px; color: {p['muted']}; margin-bottom: 5px;
-  }}
-  .field.missing .label::after {{
-    content: " empty"; color: {p['accent']}; font-size: 11px;
-  }}
+  label.f {{ display: block; margin-bottom: 12px; }}
+  label.f span {{ display: block; font-size: 11.5px; color: {p['muted']}; margin-bottom: 4px; }}
   input {{
-    width: 100%; padding: 9px 11px; font: inherit; font-size: 14px;
-    color: {p['text']}; background: {p['ground']};
-    border: 1px solid {p['hairline']}; border-radius: 3px;
+    width: 100%; padding: 8px 10px; font: inherit; color: {p['text']};
+    background: {p['ground']}; border: 1px solid {p['hairline']}; border-radius: 3px;
   }}
   input:focus {{ outline: none; border-color: {p['accent']}; }}
 
-  h2 {{
-    font-size: 12px; color: {p['muted']}; font-weight: 500;
-    margin: 30px 0 10px; padding-top: 20px; border-top: 1px solid {p['hairline']};
-  }}
-  .extra-row {{ display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; margin-bottom: 6px; }}
-  .extra-row button, .add {{
-    background: none; border: 1px solid {p['hairline']}; color: {p['muted']};
-    border-radius: 3px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
-  }}
-  .extra-row button:hover, .add:hover {{ color: {p['text']}; border-color: {p['muted']}; }}
-  .add {{ margin-top: 4px; }}
+  h2 {{ font-size: 11.5px; color: {p['muted']}; font-weight: 500;
+       margin: 22px 0 8px; padding-top: 14px; border-top: 1px solid {p['hairline']}; }}
+  .xrow {{ display: grid; grid-template-columns: 1fr 1fr auto; gap: 5px; margin-bottom: 5px; }}
+  button {{ font: inherit; cursor: pointer; border-radius: 3px; }}
+  .ghost {{ background: none; border: 1px solid {p['hairline']}; color: {p['muted']}; padding: 7px 11px; }}
+  .ghost:hover {{ color: {p['text']}; border-color: {p['muted']}; }}
 
-  .actions {{
-    position: fixed; bottom: 0; right: 0; width: 460px;
-    padding: 16px 36px; background: {p['raised']};
-    border-top: 1px solid {p['hairline']}; border-left: 1px solid {p['hairline']};
-    display: flex; gap: 10px; align-items: center;
+  .foot {{
+    border-top: 1px solid {p['hairline']}; padding: 12px 22px;
+    display: grid; gap: 8px; background: {p['raised']};
   }}
-  @media (max-width: 900px) {{ .actions {{ width: 100%; }} }}
-  .confirm {{
-    flex: 1; padding: 11px; font: inherit; font-weight: 600; cursor: pointer;
-    background: {p['text']}; color: {p['ground']}; border: none; border-radius: 3px;
+  .nav {{ display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }}
+  .nav .mid {{ text-align: center; font-size: 12px; color: {p['muted']}; }}
+  .skip {{ border: 1px solid {p['hairline']}; background: none; color: {p['muted']}; padding: 8px; }}
+  .skip.on {{ background: {p['accent']}; border-color: {p['accent']}; color: #fff; }}
+  .publish {{
+    background: {p['text']}; color: {p['ground']}; border: none;
+    padding: 11px; font-weight: 600;
   }}
-  .confirm:hover {{ background: #fff; }}
-  .cancel {{
-    padding: 11px 16px; font: inherit; cursor: pointer; color: {p['muted']};
-    background: none; border: 1px solid {p['hairline']}; border-radius: 3px;
+  .publish:hover {{ background: #fff; }}
+  .keys {{ font-size: 11px; color: {p['muted']}; text-align: center; }}
+  .done {{
+    grid-column: 1 / -1; display: grid; place-items: center;
+    height: 100vh; color: {p['muted']}; font-size: 15px;
   }}
-  .cancel:hover {{ color: {p['text']}; }}
-  .done {{ display: grid; place-items: center; height: 100vh; color: {p['muted']}; }}
 </style></head>
 <body>
-  <div class="preview"><img src="/preview.webp" alt=""></div>
-  <div class="panel">
-    <h1>{_esc(data.get('id',''))}</h1>
-    <div class="sub">{data.get('width','?')} × {data.get('height','?')} · {subtitle}</div>
-    {warn_html}
-    <form id="f">{''.join(fields_html)}</form>
-
-    <h2>Extra fields — anything the camera didn't record</h2>
-    <div id="extras">{extra_rows}</div>
-    <button type="button" class="add" id="add">+ add field</button>
+  <div class="stage" id="stage">
+    <span class="skipbadge">SKIPPED</span>
+    <img id="preview" alt="">
   </div>
 
-  <div class="actions">
-    <button class="cancel" id="cancel">Cancel</button>
-    <button class="confirm" id="confirm">Confirm &amp; publish</button>
+  <div class="panel">
+    <div class="head">
+      <div class="counter" id="counter"></div>
+      <div class="fname" id="fname"></div>
+      <div class="album" id="albumline"></div>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+
+    <div class="body">
+      <div id="warn"></div>
+      <form id="form"></form>
+      <h2>Extra fields</h2>
+      <div id="extras"></div>
+      <button type="button" class="ghost" id="addx">+ add field</button>
+    </div>
+
+    <div class="foot">
+      <div class="nav">
+        <button class="ghost" id="prev">&larr;</button>
+        <span class="mid" id="mid"></span>
+        <button class="ghost" id="next">&rarr;</button>
+      </div>
+      <button class="skip" id="skip">Skip this photo</button>
+      <button class="publish" id="publish"></button>
+      <div class="keys">&larr; &rarr; move &nbsp;·&nbsp; S skip &nbsp;·&nbsp; Ctrl+Enter publish</div>
+    </div>
   </div>
 
 <script>
-  const extras = document.getElementById('extras');
+const ROWS = {json.dumps(payload)};
+const FIELDS = {json.dumps([[k, lbl, ph] for k, lbl, ph in fields])};
+ROWS.forEach(r => {{ r.skip = false; r.data.extra = r.data.extra || {{}}; }});
 
-  document.getElementById('add').onclick = () => {{
-    const row = document.createElement('div');
-    row.className = 'extra-row';
-    row.innerHTML = '<input class="ek" placeholder="name"><input class="ev" placeholder="value"><button type="button" class="rm">remove</button>';
-    extras.appendChild(row);
-    row.querySelector('.ek').focus();
-  }};
+let i = 0;
+const $ = id => document.getElementById(id);
 
-  extras.addEventListener('click', e => {{
-    if (e.target.classList.contains('rm')) e.target.closest('.extra-row').remove();
-  }});
+function buildForm() {{
+  $("form").replaceChildren(...FIELDS.map(([key, label, ph]) => {{
+    const l = document.createElement("label"); l.className = "f";
+    const s = document.createElement("span"); s.textContent = label;
+    const inp = document.createElement("input");
+    inp.name = key; inp.placeholder = ph; inp.autocomplete = "off";
+    inp.addEventListener("input", () => {{ ROWS[i].data[key] = inp.value.trim(); }});
+    l.append(s, inp); return l;
+  }}));
+}}
 
-  function collect() {{
-    const data = {json.dumps(data)};
-    for (const el of document.querySelectorAll('#f input')) data[el.name] = el.value.trim();
-    const extra = {{}};
-    for (const row of extras.querySelectorAll('.extra-row')) {{
-      const k = row.querySelector('.ek').value.trim();
-      const v = row.querySelector('.ev').value.trim();
-      if (k) extra[k] = v;
+function renderExtras() {{
+  const box = $("extras"); box.replaceChildren();
+  Object.entries(ROWS[i].data.extra).forEach(([k, v]) => box.appendChild(xrow(k, v)));
+}}
+
+function xrow(k = "", v = "") {{
+  const row = document.createElement("div"); row.className = "xrow";
+  const ek = document.createElement("input"); ek.value = k; ek.placeholder = "name";
+  const ev = document.createElement("input"); ev.value = v; ev.placeholder = "value";
+  const rm = document.createElement("button"); rm.className = "ghost"; rm.textContent = "x";
+  const sync = () => {{
+    const obj = {{}};
+    for (const r of document.querySelectorAll(".xrow")) {{
+      const a = r.children[0].value.trim(), b = r.children[1].value.trim();
+      if (a) obj[a] = b;
     }}
-    data.extra = extra;
-    return data;
-  }}
+    ROWS[i].data.extra = obj;
+  }};
+  ek.addEventListener("input", sync); ev.addEventListener("input", sync);
+  rm.addEventListener("click", () => {{ row.remove(); sync(); }});
+  row.append(ek, ev, rm); return row;
+}}
 
-  async function send(action) {{
-    await fetch('/', {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{ action, data: action === 'confirm' ? collect() : null }})
-    }});
-    document.body.innerHTML =
-      '<div class="done">' +
-      (action === 'confirm' ? 'Confirmed — back to the terminal.' : 'Cancelled.') +
-      '</div>';
-  }}
+function show(n) {{
+  i = Math.max(0, Math.min(ROWS.length - 1, n));
+  const row = ROWS[i];
 
-  document.getElementById('confirm').onclick = () => send('confirm');
-  document.getElementById('cancel').onclick  = () => send('cancel');
-
-  // cmd/ctrl+enter confirms
-  document.addEventListener('keydown', e => {{
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send('confirm');
+  $("preview").src = "/preview/" + i + ".webp";
+  // keep the neighbours warm so stepping through feels instant
+  [i + 1, i - 1].forEach(j => {{
+    if (j >= 0 && j < ROWS.length) new Image().src = "/preview/" + j + ".webp";
   }});
+
+  $("counter").textContent = `Photo ${{i + 1}} of ${{ROWS.length}}`;
+  $("fname").textContent = row.id;
+  $("albumline").textContent = row.album ? "album: " + row.album : "";
+  $("bar").style.width = ((i + 1) / ROWS.length * 100) + "%";
+
+  $("warn").replaceChildren(...row.warnings.map(w => {{
+    const d = document.createElement("div"); d.className = "warn"; d.textContent = w; return d;
+  }}));
+
+  for (const inp of document.querySelectorAll("#form input")) {{
+    inp.value = row.data[inp.name] || "";
+  }}
+  renderExtras();
+
+  $("skip").classList.toggle("on", row.skip);
+  $("skip").textContent = row.skip ? "Skipped - click to include" : "Skip this photo";
+  $("stage").classList.toggle("skipped", row.skip);
+  $("prev").disabled = i === 0;
+  $("next").disabled = i === ROWS.length - 1;
+  updateCounts();
+}}
+
+function updateCounts() {{
+  const keep = ROWS.filter(r => !r.skip).length;
+  $("publish").textContent = `Publish ${{keep}} photo${{keep === 1 ? "" : "s"}}`;
+  $("publish").disabled = keep === 0;
+  const skipped = ROWS.length - keep;
+  $("mid").textContent = skipped ? `${{skipped}} skipped` : "";
+}}
+
+$("prev").onclick = () => show(i - 1);
+$("next").onclick = () => show(i + 1);
+$("addx").onclick = () => $("extras").appendChild(xrow());
+$("skip").onclick = () => {{ ROWS[i].skip = !ROWS[i].skip; show(i); }};
+
+$("publish").onclick = async () => {{
+  await fetch("/", {{
+    method: "POST", headers: {{ "Content-Type": "application/json" }},
+    body: JSON.stringify({{ action: "publish",
+      rows: ROWS.map(r => ({{ id: r.id, data: r.data, skip: r.skip }})) }})
+  }});
+  const keep = ROWS.filter(r => !r.skip).length;
+  document.body.replaceChildren(Object.assign(document.createElement("div"), {{
+    className: "done",
+    textContent: `Publishing ${{keep}} photo${{keep === 1 ? "" : "s"}} - back to the terminal.`
+  }}));
+}};
+
+document.addEventListener("keydown", e => {{
+  if (e.target.tagName === "INPUT" && !(e.ctrlKey || e.metaKey)) return;
+  if (e.key === "ArrowRight") {{ e.preventDefault(); show(i + 1); }}
+  else if (e.key === "ArrowLeft") {{ e.preventDefault(); show(i - 1); }}
+  else if (e.key === "s" || e.key === "S") {{ ROWS[i].skip = !ROWS[i].skip; show(i); }}
+  else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("publish").click();
+}});
+
+buildForm();
+show(0);
 </script>
 </body></html>"""
-
-
-def _esc(s):
-    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))

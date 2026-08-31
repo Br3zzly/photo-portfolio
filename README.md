@@ -15,9 +15,15 @@ Drop a full-resolution JPEG into `photos/`, then:
 python tools/publish.py
 ```
 
-That reads the EXIF, opens a form in your browser so you can check and correct
-the metadata, then tiles the photo, uploads everything to R2, and refreshes the
-manifest. The photo is live as soon as it finishes. No commit required.
+It reads the EXIF from every new photo, then opens **one page in one tab**
+where you walk the whole batch: arrow keys to move, `S` to skip a frame you do
+not want published, `Ctrl+Enter` when you are done. After that it tiles
+everything you kept, uploads to R2 and refreshes the manifest without further
+input. No commit required.
+
+Re-running is always safe. Already-published photos are skipped, and the
+upload syncs everything the manifest references -- so an interrupted run is
+fixed simply by running it again.
 
 Useful flags:
 
