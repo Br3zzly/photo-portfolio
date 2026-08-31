@@ -16,7 +16,14 @@
   --scrim:     rgba(255, 255, 255, .78);
   --chip:      rgba(255, 255, 255, .72);
   --shade:     0.97;      /* resting brightness on thumbnails */
-  --card-shadow: 0 2px 6px rgba(0,0,0,.10), 0 18px 50px rgba(0,0,0,.18);
+
+  /* The card deliberately inverts against the page -- a dark mat on a light
+     ground, a white one on black. It reads like a mounted print, so the
+     plate's text has to invert with it. */
+  --card-bg:    #0A0A0A;
+  --card-text:  #F5F3F0;
+  --card-muted: #8C8C8C;
+  --card-shadow: 0 2px 6px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.26);
 
   --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
 
@@ -38,6 +45,9 @@
     --scrim:     rgba(0, 0, 0, .78);
     --chip:      rgba(0, 0, 0, .55);
     --shade:     0.92;
+    --card-bg:    #FFFFFF;
+    --card-text:  #14120F;
+    --card-muted: #6E6862;
     /* the lightbox scrim is not pure black, so a soft shadow still reads */
     --card-shadow: 0 2px 10px rgba(0,0,0,.6), 0 22px 60px rgba(0,0,0,.7);
     color-scheme: dark;
@@ -54,6 +64,9 @@
   --scrim:     rgba(0, 0, 0, .78);
   --chip:      rgba(0, 0, 0, .55);
   --shade:     0.92;
+  --card-bg:    #FFFFFF;
+  --card-text:  #14120F;
+  --card-muted: #6E6862;
   /* the lightbox scrim is not pure black, so a soft shadow still reads */
   --card-shadow: 0 2px 10px rgba(0,0,0,.6), 0 22px 60px rgba(0,0,0,.7);
   color-scheme: dark;
@@ -338,7 +351,7 @@ body.lightbox-open { overflow: hidden; }
   margin: 0;
   display: flex;
   flex-direction: column;
-  background: var(--ground);
+  background: var(--card-bg);
   max-width: 100%;
   max-height: 100%;
   /* the card takes each photograph's shape, so stepping between a portrait
@@ -401,7 +414,7 @@ body.lightbox-open { overflow: hidden; }
   justify-content: space-between;
   gap: 20px;
   padding: 13px 16px 14px;
-  background: var(--ground);
+  background: var(--card-bg);
   transition: none;
 }
 
@@ -417,7 +430,7 @@ body.lightbox-open { overflow: hidden; }
   font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.005em;
-  color: var(--text);
+  color: var(--card-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -429,7 +442,7 @@ body.lightbox-open { overflow: hidden; }
   flex-wrap: wrap;
   gap: 0 10px;
   font-size: 12.5px;
-  color: var(--muted);
+  color: var(--card-muted);
 }
 
 /* the maker's mark, right */
@@ -437,7 +450,7 @@ body.lightbox-open { overflow: hidden; }
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  color: var(--text);
+  color: var(--card-text);
 }
 
 .plate-mark img {
