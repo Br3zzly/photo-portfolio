@@ -102,7 +102,7 @@ body.lightbox-open { overflow: hidden; }
   padding: 0;
   border: 0;
   background: var(--raised);
-  cursor: zoom-in;
+  cursor: pointer;
   overflow: hidden;
   /* --ar is set per-tile from the manifest */
   flex: 1 1 calc(var(--ar) * var(--row));
@@ -146,8 +146,6 @@ body.lightbox-open { overflow: hidden; }
    An album sits in the same grid as a photograph, distinguished only by its
    name in the corner and a slight darkening so the label stays readable.
    ------------------------------------------------------------------------- */
-
-.tile.album { cursor: pointer; }
 
 .tile.album::after {
   content: "";
