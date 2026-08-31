@@ -16,6 +16,7 @@
   --scrim:     rgba(255, 255, 255, .78);
   --chip:      rgba(255, 255, 255, .72);
   --shade:     0.97;      /* resting brightness on thumbnails */
+  --card-shadow: 0 2px 6px rgba(0,0,0,.10), 0 18px 50px rgba(0,0,0,.18);
 
   --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
 
@@ -37,6 +38,8 @@
     --scrim:     rgba(0, 0, 0, .78);
     --chip:      rgba(0, 0, 0, .55);
     --shade:     0.92;
+    /* the lightbox scrim is not pure black, so a soft shadow still reads */
+    --card-shadow: 0 2px 10px rgba(0,0,0,.6), 0 22px 60px rgba(0,0,0,.7);
     color-scheme: dark;
   }
 }
@@ -51,6 +54,8 @@
   --scrim:     rgba(0, 0, 0, .78);
   --chip:      rgba(0, 0, 0, .55);
   --shade:     0.92;
+  /* the lightbox scrim is not pure black, so a soft shadow still reads */
+  --card-shadow: 0 2px 10px rgba(0,0,0,.6), 0 22px 60px rgba(0,0,0,.7);
   color-scheme: dark;
 }
 
@@ -337,16 +342,7 @@ body.lightbox-open { overflow: hidden; }
   max-width: 100%;
   max-height: 100%;
   transition: box-shadow .35s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,.10), 0 12px 44px rgba(0,0,0,.16);
-}
-
-:root[data-theme="dark"] .card,
-:root:not([data-theme="light"]) .card { box-shadow: none; }
-
-@media (prefers-color-scheme: light) {
-  :root[data-theme="light"] .card {
-    box-shadow: 0 1px 3px rgba(0,0,0,.10), 0 12px 44px rgba(0,0,0,.16);
-  }
+  box-shadow: var(--card-shadow);
 }
 
 .frame {
