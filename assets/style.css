@@ -1,0 +1,389 @@
+/* ---------------------------------------------------------------------------
+   Darkroom palette. Warm near-blacks, never pure #000 or #fff, so photographs
+   read as prints under gallery light rather than images on a dark UI.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --ground:    #131211;
+  --raised:    #1C1A18;
+  --hairline:  #2E2A26;
+  --text:      #EDE9E3;
+  --muted:     #9A928A;
+  --safelight: #C4553D;
+
+  --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+
+  --gap: 14px;
+  --row: 300px;          /* target row height in the justified grid */
+  --pad: clamp(20px, 4vw, 56px);
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--serif);
+  font-weight: 300;
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The gallery is what gets blurred behind the lightbox. Isolating it keeps
+   the blur cheap and stops it bleeding into fixed UI. */
+body.lightbox-open { overflow: hidden; }
+
+
+/* --- masthead ------------------------------------------------------------ */
+
+.masthead {
+  padding: clamp(48px, 9vw, 104px) var(--pad) clamp(28px, 5vw, 52px);
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: clamp(28px, 4.6vw, 46px);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+}
+
+.tagline {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: clamp(15px, 1.6vw, 18px);
+  font-style: italic;
+  max-width: 46ch;
+}
+
+
+/* --- justified grid ------------------------------------------------------
+   Each tile grows in proportion to its aspect ratio, so a row of photos fills
+   the width exactly and every photograph keeps its true shape. No cards, no
+   borders, no shadows: the photographs are the only bright things on the page.
+   ------------------------------------------------------------------------- */
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding: 0 var(--pad) var(--pad);
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
+.tile {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: var(--raised);
+  cursor: zoom-in;
+  overflow: hidden;
+  /* --ar is set per-tile from the manifest */
+  flex: 1 1 calc(var(--ar) * var(--row));
+  height: var(--row);
+  /* stop a lone wide photo stretching to absurd width */
+  max-width: 100%;
+}
+
+/* keeps the final row from stretching its items across the full width */
+.grid::after {
+  content: "";
+  flex-grow: 999999;
+  height: 0;
+}
+
+.tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* the tiny placeholder sits underneath until the thumbnail decodes */
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity .5s ease, filter .5s ease;
+  filter: brightness(0.92);
+}
+
+.tile img.ready { opacity: 1; }
+
+@media (hover: hover) {
+  .tile:hover img { filter: brightness(1.04); }
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--safelight);
+  outline-offset: 3px;
+}
+
+/* On a phone a justified row has no room to justify. One photograph per row,
+   full width, each keeping its true aspect ratio. */
+@media (max-width: 640px) {
+  :root { --gap: 10px; }
+
+  .grid { display: block; }
+
+  .tile {
+    width: 100%;
+    height: auto;
+    aspect-ratio: var(--ar);
+    margin-bottom: var(--gap);
+  }
+
+  .tile img { object-fit: contain; }
+}
+
+
+/* --- status / colophon --------------------------------------------------- */
+
+.status, .colophon {
+  padding: 0 var(--pad) var(--pad);
+  max-width: 1700px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.status[hidden] { display: none; }
+
+.status.error { color: var(--safelight); }
+
+.colophon {
+  padding-top: 40px;
+  padding-bottom: 60px;
+}
+
+
+/* --- lightbox ------------------------------------------------------------
+   Opens over the live gallery, which is blurred in place. That keeps the two
+   views feeling like one space instead of a photo floating on a copy of itself.
+   ------------------------------------------------------------------------- */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  opacity: 0;
+  transition: opacity .28s ease;
+}
+
+.lightbox[hidden] { display: none; }
+.lightbox.open { opacity: 1; }
+
+.lightbox-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(19, 18, 17, 0.82);
+  -webkit-backdrop-filter: blur(28px) saturate(0.7);
+  backdrop-filter: blur(28px) saturate(0.7);
+}
+
+/* When the viewer is zoomed in, the photo takes the whole screen and the
+   surrounding chrome gets out of the way. */
+.lightbox.zoomed .lightbox-scrim { background: var(--ground); }
+
+
+.stage {
+  position: relative;
+  margin: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vh, 54px) clamp(16px, 5vw, 90px) 0;
+  transition: padding .35s cubic-bezier(.22,.61,.36,1);
+}
+
+.lightbox.zoomed .stage { padding: 0; }
+
+.placeholder {
+  position: absolute;
+  inset: clamp(16px, 4vh, 54px) clamp(16px, 5vw, 90px) 0;
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: blur(18px);
+  transform: scale(1.02);
+  opacity: 1;
+  transition: opacity .45s ease .1s;
+  pointer-events: none;
+}
+
+.placeholder.hidden { opacity: 0; }
+
+.viewer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .4s ease;
+}
+
+.viewer.ready { opacity: 1; }
+
+
+/* --- metadata ------------------------------------------------------------ */
+
+.meta {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 18px clamp(16px, 5vw, 90px) clamp(20px, 4vh, 40px);
+  transition: opacity .3s ease;
+}
+
+/* fades away while you are actually looking at the photograph.
+   The close button deliberately stays put -- losing the way out mid-gesture
+   feels like a trap. */
+.lightbox.interacting .meta,
+.lightbox.interacting .hint,
+.lightbox.interacting .nav { opacity: 0; pointer-events: none; }
+
+.meta-left, .meta-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.meta-right { text-align: right; align-items: flex-end; }
+
+.meta-title {
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.meta-caption, .meta-gear, .meta-exposure, .meta-date {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.meta-gear { font-size: 15px; color: var(--text); }
+
+.meta-caption { font-style: italic; }
+
+/* the gaps between exposure values come from here, not from spaces in the
+   text -- HTML would collapse those to a single space */
+.meta-exposure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+  justify-content: flex-end;
+}
+
+.meta-date { margin-top: 1px; }
+
+@media (max-width: 620px) {
+  .meta-exposure { justify-content: flex-start; }
+}
+
+.meta:empty { display: none; }
+
+@media (max-width: 620px) {
+  .meta { gap: 4px; }
+  .meta-right { text-align: left; align-items: flex-start; }
+}
+
+
+/* --- controls ------------------------------------------------------------ */
+
+.close, .nav {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: rgba(28, 26, 24, 0.72);
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity .3s ease, background .2s ease, border-color .2s ease;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.close:hover, .nav:hover {
+  background: rgba(46, 42, 38, 0.9);
+  border-color: var(--muted);
+}
+
+.close:focus-visible, .nav:focus-visible {
+  outline: 2px solid var(--safelight);
+  outline-offset: 2px;
+}
+
+.close {
+  top: clamp(14px, 3vh, 26px);
+  left: clamp(14px, 3vw, 26px);
+  width: 40px; height: 40px;
+}
+
+.nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px; height: 46px;
+}
+
+.nav.prev { left: clamp(10px, 2vw, 22px); }
+.nav.next { right: clamp(10px, 2vw, 22px); }
+.nav[disabled] { opacity: 0; pointer-events: none; }
+
+@media (max-width: 620px) {
+  .nav { display: none; }   /* swipe instead */
+}
+
+/* sits inside the stage so it can never collide with the metadata strip */
+.hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(19, 18, 17, .6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity .4s ease;
+}
+
+.hint.gone { opacity: 0; }
+
+
+/* --- OpenSeadragon navigator --------------------------------------------- */
+
+.openseadragon-canvas { outline: none !important; }
+
+.openseadragon-container .navigator {
+  border: 1px solid var(--hairline) !important;
+  background: rgba(19, 18, 17, .8) !important;
+  border-radius: 2px;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
