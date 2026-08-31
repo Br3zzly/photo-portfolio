@@ -337,9 +337,13 @@ function sizeCard() {
 
   const ar = (photo.width || 3) / (photo.height || 2);
   const cs = getComputedStyle(stage);
-  const availW = stage.clientWidth
+
+  // Measured from the lightbox, never from the stage. The stage is sized by
+  // its own content, so measuring it would feed the card's current size back
+  // into the calculation and let it grow without bound.
+  const availW = lightbox.clientWidth
     - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const availH = stage.clientHeight
+  const availH = lightbox.clientHeight
     - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
 
   // two passes: the plate can wrap, so its height depends on the width we pick
