@@ -212,11 +212,15 @@ def publish_job(edits):
 def delete_job(ids):
     def work(log):
         manifest = store.load()
-        for photo_id in ids:
-            log(f"  {photo_id}", label=photo_id)
-            store.purge(photo_id, log=log)
+
+        # Several at once. Each photograph is its own prefix in the bucket, so
+        # they do not contend, and the time is nearly all spent waiting on
+        # round trips rather than on anything happening here.
+        def finished(photo_id):
             store.discard_local(photo_id)
-            log.step()
+            log.step(photo_id)
+
+        store.purge_many(ids, log=log, done=finished)
         store.drop(manifest, ids)
         log("updating the manifest", label="Updating the manifest")
         store.save(manifest)

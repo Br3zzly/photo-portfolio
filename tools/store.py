@@ -9,8 +9,8 @@ drop anything this machine happens not to have.
 """
 
 import json
-import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import config
@@ -123,9 +123,15 @@ def upload(photo_id, rev, log=print):
     stem = Path(base).name
 
     log("    uploading tiles")
+    # --no-traverse: without it rclone lists the whole destination to work out
+    # what it can skip, which means reading every object in the bucket to
+    # upload one photograph -- a cost that grows with the collection. Nothing
+    # can be there to skip anyway: the path carries a fingerprint, so a photo
+    # being uploaded has by definition never been at this address before.
     run([rclone, "copy", str((TILES_DIR / base).parent), f"{DEST}/{prefix}",
          "--include", f"{stem}_files/**", "--include", f"{stem}.dzi",
          "--transfers", "48", "--checkers", "48", "--s3-no-check-bucket",
+         "--no-traverse",
          "--header-upload", f"Cache-Control: {config.TILE_CACHE_CONTROL}"])
 
     log("    uploading thumbnail")
@@ -134,40 +140,78 @@ def upload(photo_id, rev, log=print):
          "--header-upload", f"Cache-Control: {config.TILE_CACHE_CONTROL}"])
 
 
-def purge(photo_id, log=print):
-    """
-    Delete every revision of a photograph from the bucket.
+def _list(where, kind):
+    """One shallow listing of a prefix. Cheap: a single request, no recursion."""
+    try:
+        out = run([find_tool("rclone"), "lsf", where, kind, "--s3-no-check-bucket"])
+    except RuntimeError:
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip()]
 
-    Matched by prefix rather than by the revision the manifest happens to name,
-    so a photograph re-tiled at some point does not leave its earlier pyramids
-    behind, unreferenced and unreachable but still paid for.
-    """
-    rclone = find_tool("rclone")
+
+def _split(photo_id):
     parent = str(Path(photo_id).parent).replace("\\", "/")
     prefix = "" if parent == "." else parent + "/"
-    stem = Path(photo_id).name
+    return prefix, Path(photo_id).name
+
+
+def purge(photo_id, log=print):
+    """
+    Delete every trace of a photograph from the bucket.
+
+    Scoped to prefixes rather than expressed as a filter over the bucket. A
+    filter reads every object there is before it can tell which few to remove,
+    so removing one photograph cost a full listing of the collection and
+    removing ten cost ten of them -- time that grew with how much was
+    published rather than with how much was being deleted. Listing the one
+    folder the photograph lives in, then purging its own pyramid by prefix,
+    touches only that photograph.
+
+    Every revision goes, including the un-fingerprinted names from before tiles
+    carried one, which the old filter could not match and therefore left behind.
+    """
+    rclone = find_tool("rclone")
+    prefix, stem = _split(photo_id)
 
     log(f"    removing {photo_id} from the bucket")
-    try:
-        run([rclone, "delete", f"{DEST}/{prefix}",
-             "--include", f"{stem}__*_files/**",
-             "--include", f"{stem}__*.dzi",
-             "--transfers", "48", "--checkers", "48",
-             "--rmdirs", "--s3-no-check-bucket"])
-    except RuntimeError:
-        pass                    # already gone
 
-    # Fingerprinted, like the tiles. The old code deleted thumbs/<id>.webp,
-    # a name nothing has been written under since thumbnails started carrying
-    # a revision, so every removed photograph left its thumbnail behind.
-    try:
-        run([rclone, "delete", f"{DEST}/thumbs/{prefix}",
-             "--include", f"{stem}__*.webp",
-             "--include", f"{stem}.webp",
-             "--rmdirs", "--s3-no-check-bucket"])
-    except RuntimeError:
-        pass
+    def mine(name):
+        """`LL_06590`, or any revision of it, and nothing that merely starts
+        the same way -- LL_065 must not claim LL_06590."""
+        return name == stem or name.startswith(f"{stem}__")
 
+    def quiet(args):
+        try:
+            run(args)
+        except RuntimeError:
+            pass            # already gone
+
+    # the pyramids: one purge each, reading only its own prefix
+    for entry in _list(f"{DEST}/{prefix}", "--dirs-only"):
+        folder = entry.rstrip("/")
+        if not folder.endswith("_files"):
+            continue
+        if mine(folder[: -len("_files")]):
+            quiet([rclone, "purge", f"{DEST}/{prefix}{folder}",
+                   "--transfers", "64", "--checkers", "64", "--s3-no-check-bucket"])
+
+    # the descriptors beside them, and the thumbnails
+    for where, suffix in ((f"{DEST}/{prefix}", ".dzi"),
+                          (f"{DEST}/thumbs/{prefix}", ".webp")):
+        for name in _list(where, "--files-only"):
+            if name.endswith(suffix) and mine(name[: -len(suffix)]):
+                quiet([rclone, "deletefile", f"{where}{name}", "--s3-no-check-bucket"])
+
+
+def purge_many(ids, log=print, done=None, workers=6):
+    """
+    Several at once. Each photograph is a separate prefix, so they do not
+    contend, and the time is dominated by round trips rather than by anything
+    this machine is doing.
+    """
+    with ThreadPoolExecutor(max_workers=min(workers, max(len(ids), 1))) as pool:
+        for _ in pool.map(lambda pid: (purge(pid, log=log), done and done(pid)), ids):
+            pass
 
 def discard_local(photo_id, rev=None):
     """
