@@ -139,10 +139,17 @@ body.lightbox-open { overflow: hidden; }
 
 .tile:active { transform: translateY(-1px); }
 
+/* Keyboard focus reuses the hover treatment rather than drawing a hard ring
+   around the photograph. Closing the lightbox returns focus to the tile, and
+   after an Escape that counts as keyboard focus, so the ring was appearing on
+   the gallery unprompted. */
 .tile:focus-visible {
-  outline: 2px solid var(--safelight);
-  outline-offset: 3px;
+  outline: none;
+  transform: translateY(-4px);
+  box-shadow: var(--tile-shadow);
 }
+
+.tile:focus-visible img { filter: brightness(1); }
 
 
 /* --- album tiles ---------------------------------------------------------
