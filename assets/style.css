@@ -75,6 +75,11 @@
 
 * { box-sizing: border-box; }
 
+/* Form controls do not inherit type from the page -- the UA stylesheet puts
+   its own Arial on them. Every tile is a button, so without this the album
+   labels sitting on them are the one place the site font never reached. */
+button { font: inherit; color: inherit; }
+
 html {
   -webkit-text-size-adjust: 100%;
   /* reserve the scrollbar so opening the lightbox, which locks scrolling,
