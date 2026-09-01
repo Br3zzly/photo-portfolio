@@ -375,6 +375,19 @@ function scheduleRefit(delay) {
 /* --- input --------------------------------------------------------------- */
 
 export function initLightbox({ onClose, onStep }) {
+  /* A cheap safety net, not a diagnosis. The card is sized from the plate's
+     measured height, so anything that changes the plate after the fact moves
+     the frame with it; the web font landing is the obvious candidate on a
+     first visit, though measuring it showed the same height in either face.
+     Re-fitting once when the fonts settle costs one call and covers the case
+     if it ever does differ -- on a repeat visit the font is cached and this
+     resolves immediately, doing nothing. */
+  document.fonts.ready.then(() => {
+    if (!isOpen()) return;
+    sizeCard();
+    refit();
+  });
+
   el("close").addEventListener("click", onClose);
   prevBtn.addEventListener("click", () => onStep(-1));
   nextBtn.addEventListener("click", () => onStep(1));

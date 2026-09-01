@@ -15,6 +15,7 @@ export function showTiles(element, source, handlers) {
   }
   viewer = create(element, source);
   wire(handlers);
+  watchContainer(element);
 }
 
 function create(element, tileSources) {
@@ -36,7 +37,12 @@ function create(element, tileSources) {
     springStiffness: 7.5,
     animationTime: 0.9,
     immediateRender: false,
-    preserveImageSizeOnResize: true,
+    /* preserveImageSizeOnResize is deliberately off. It keeps the photograph at
+       a constant pixel size when the container changes, which is the opposite
+       of what this viewer wants: the photograph is meant to fit the frame, and
+       every size change here is followed by a re-fit. Left on, a container that
+       grows after the viewer opened leaves the photograph drawn at its older,
+       smaller size, sitting in the middle of the frame. */
     maxImageCacheCount: 220,    // keep memory bounded on phones
   };
 
@@ -67,12 +73,43 @@ function wire({ onOpen, onOpenFailed, onInteract, onSettle, onToggleZoom }) {
 
 const loaded = () => Boolean(viewer && viewer.world.getItemCount());
 
-/* Fit the photograph to the frame. Only meaningful once the card has finished
-   changing size: OpenSeadragon computes the fit from the container it sees at
-   that instant, so fitting mid-animation leaves the photograph at the previous
-   shape's scale. */
+/* The frame can still change size after the photograph has been fitted to it:
+   a web font swapping in, the maker's mark arriving, the plate reflowing --
+   all of which happen on a first visit and not on a cached one. Rather than
+   trying to name every such moment, watch the container and re-fit whenever it
+   actually changes. A visitor who has zoomed in is left alone. */
+function watchContainer(element) {
+  if (typeof ResizeObserver !== "function") return;
+  let settle = null;
+  new ResizeObserver(() => {
+    clearTimeout(settle);
+    settle = setTimeout(() => {
+      if (loaded() && !isZoomedIn()) refit();
+    }, 80);
+  }).observe(element);
+}
+
+/* Fit the photograph to the frame.
+ *
+ * The container size is handed over explicitly rather than left to
+ * OpenSeadragon to notice. It refreshes that figure inside its own animation
+ * loop, so goHome() on its own fits to whatever size the loop last saw -- and
+ * when the frame has just changed, that is the old one. The result is a
+ * photograph drawn at its previous scale, sitting small in the middle of a
+ * larger frame, with nothing afterwards to correct it. forceResize() is not
+ * enough either: it only raises a flag for that same loop.
+ *
+ * Still only meaningful once the card has finished changing size, since fitting
+ * mid-animation fits to a shape the card is on its way out of.
+ */
 export function refit() {
-  if (loaded()) viewer.viewport.goHome(true);
+  if (!loaded()) return;
+  const box = viewer.container;
+  viewer.viewport.resize(
+    new OpenSeadragon.Point(box.clientWidth, box.clientHeight), false
+  );
+  viewer.viewport.goHome(true);
+  viewer.forceRedraw();
 }
 
 export function goHome() {
