@@ -331,6 +331,23 @@ export function initLightbox({ onClose, onStep }) {
   prevBtn.addEventListener("click", () => onStep(-1));
   nextBtn.addEventListener("click", () => onStep(1));
 
+  /* Clicking the space around the card closes it, the same as the way out in
+     the corner. Both ends of the click have to have landed outside: panning a
+     zoomed photograph regularly releases the mouse beyond the card, and that
+     is a drag, not a click on the backdrop. Buttons are left alone so the
+     chevrons either side do not close the photograph out from under
+     themselves. */
+  let pressedOutside = false;
+  const outside = (target) => !card.contains(target) && !target.closest("button");
+
+  lightbox.addEventListener("pointerdown", (e) => {
+    pressedOutside = outside(e.target);
+  });
+
+  lightbox.addEventListener("click", (e) => {
+    if (pressedOutside && outside(e.target)) onClose();
+  });
+
   card.addEventListener("transitionend", (e) => {
     if (e.target === card && (e.propertyName === "width" || e.propertyName === "height")) {
       scheduleRefit(0);
