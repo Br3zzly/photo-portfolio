@@ -198,23 +198,45 @@ function morph(fromEl, toEl, mutate) {
 
 
 /* --- the plate ------------------------------------------------------------
-   Camera maker and model in bold, then lens, focal length, aperture, shutter
-   and ISO in grey, with the maker's mark on the right. Everything is built
-   from what exists, so a stacked frame carrying no EXIF at all leaves the
-   plate empty rather than rendering blank slots.
+   The settings, with the date beneath them and the maker's mark to their left,
+   all set to the right-hand end. Everything is built from what exists, so a
+   stacked frame carrying no EXIF at all leaves the plate empty rather than
+   rendering blank slots.
    ------------------------------------------------------------------------- */
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/* "2023-08-26" -> "August 26, 2023". Assembled from the parts rather than
+   handed to Date, which reads a bare YYYY-MM-DD as UTC midnight and so lands
+   on the previous day for anyone west of Greenwich. */
+function longDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return "";
+  return `${MONTHS[+m[2] - 1]} ${+m[3]}, ${m[1]}`;
+}
+
+/* The photographer's f, U+0192, rather than a plain letter f. */
+const fStop = (aperture) =>
+  aperture ? `ƒ/${String(aperture).replace(/^f\s*\/?\s*/i, "")}` : "";
+
+/* "1/100" is already unambiguous; a bare "30" is not, so it gains the unit. */
+const exposure = (shutter) => {
+  if (!shutter) return "";
+  const s = String(shutter);
+  return s.includes("/") ? s : `${s}s`;
+};
 
 function fillPlate(photo) {
   const token = ++plateToken;
 
-  el("m-camera").textContent = photo.camera || "";
-
   const parts = [
-    photo.lens,
     photo.focal,
-    photo.aperture,
-    photo.shutter ? `${photo.shutter}s` : "",
-    photo.iso ? `ISO ${photo.iso}` : "",
+    fStop(photo.aperture),
+    exposure(photo.shutter),
+    photo.iso ? `ISO${photo.iso}` : "",
     ...Object.values(photo.extra || {}).filter(Boolean),
   ].filter(Boolean);
 
@@ -228,6 +250,8 @@ function fillPlate(photo) {
     })
   );
 
+  el("m-date").textContent = longDate(photo.date);
+
   const mark = el("m-mark");
   mark.replaceChildren();
 
@@ -237,10 +261,11 @@ function fillPlate(photo) {
   logoExists(slug).then((exists) => {
     // a fast step through the gallery can land a stale probe here
     if (!exists || token !== plateToken) return;
-    const img = document.createElement("img");
-    img.alt = photo.make || "";
-    img.src = logoUrl(slug);
-    mark.replaceChildren(img);
+    // both go in; the stylesheet shows whichever reads against the card
+    mark.replaceChildren(
+      logoImg(slug, "black", "mark-on-light", photo.make),
+      logoImg(slug, "white", "mark-on-dark", photo.make)
+    );
   });
 }
 
@@ -248,13 +273,21 @@ const makerSlug = (photo) =>
   (photo.make || (photo.camera || "").split(/\s+/)[0] || "")
     .trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-const logoUrl = (slug) => `assets/logos/${slug}.svg`;
+const logoUrl = (slug, variant) => `assets/logos/${slug}_logo_${variant}.svg`;
 
-/* A static site cannot list a directory, so whether a logo exists is settled
-   by asking for it once. The answer is cached per maker rather than per photo:
-   a maker with no logo costs one failed request for the whole session instead
-   of one for every photograph viewed. Drop an SVG in and it simply appears;
-   leave the folder empty and the mark stays blank. */
+function logoImg(slug, variant, className, make) {
+  const img = document.createElement("img");
+  img.className = className;
+  img.alt = make || "";
+  img.src = logoUrl(slug, variant);
+  return img;
+}
+
+/* A static site cannot list a directory, so whether a maker has artwork is
+   settled by asking for it once. The answer is cached per maker rather than
+   per photo: a maker with no logo costs one failed request for the whole
+   session instead of one for every photograph viewed. Drop the pair in and
+   they simply appear; leave the folder empty and the mark stays blank. */
 const logoCache = new Map();
 
 function logoExists(slug) {
@@ -263,7 +296,7 @@ function logoExists(slug) {
       const probe = new Image();
       probe.onload = () => resolve(true);
       probe.onerror = () => resolve(false);
-      probe.src = logoUrl(slug);
+      probe.src = logoUrl(slug, "black");
     }));
   }
   return logoCache.get(slug);

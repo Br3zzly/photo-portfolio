@@ -89,7 +89,7 @@ Every URL the page loads carries a `?v=` query, and they are all set in
 `app.js`. Bump that number whenever you change the CSS or any of the JS:
 
 ```bash
-sed -i 's/?v=27/?v=28/g' index.html
+sed -i 's/?v=28/?v=29/g' index.html
 ```
 
 A browser caches a file under its whole URL, query string and all, so

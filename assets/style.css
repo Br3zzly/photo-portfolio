@@ -29,14 +29,14 @@
   --card-text:   #F5F3F0;
   --card-muted:  #8C8C8C;
   --card-shadow: 0 2px 6px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.26);
-  --mat: clamp(10px, 1.1vw, 16px);   /* border around the photograph */
 
-  --serif: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+  --sans: "Readex Pro", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
 
   --gap: 14px;
   --row: 300px;          /* target row height in the justified grid */
   --pad: clamp(20px, 4vw, 56px);
-  --radius: 6px;
+  --radius: 6px;        /* grid tiles */
+  --card-radius: 12px;  /* the open card, which is much larger */
   --ease: cubic-bezier(.22, .61, .36, 1);
 
   color-scheme: light;
@@ -86,7 +86,7 @@ body {
   margin: 0;
   background: var(--ground);
   color: var(--text);
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-weight: 300;
   font-size: 17px;
   line-height: 1.5;
@@ -349,10 +349,12 @@ body.lightbox-open .back { display: none; }
   display: flex;
   flex-direction: column;
   background: var(--card-bg);
-  border-radius: var(--radius);
-  /* the mat runs all the way around the photograph; the plate below adds the
-     heavier bottom edge that makes it read as a mounted print */
-  padding: var(--mat) var(--mat) 0;
+  border-radius: var(--card-radius);
+  /* The photograph runs edge to edge; the plate underneath is the only border
+     it gets. Clipping here rounds the top of the photograph to match the card,
+     so the frame needs no radius of its own. */
+  overflow: hidden;
+  padding: 0;
   max-width: 100%;
   max-height: 100%;
   /* the card takes each photograph's shape, so stepping between a portrait
@@ -373,7 +375,6 @@ body.lightbox-open .back { display: none; }
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  border-radius: calc(var(--radius) - 2px);
 }
 
 .placeholder {
@@ -406,68 +407,73 @@ body.lightbox-open .back { display: none; }
 
 
 /* --- the plate ------------------------------------------------------------
-   Attached to the underside of the photograph, like the caption card under a
-   framed print.
+   The only border the photograph gets. Everything sits to the right: the
+   maker's mark, then the settings with the date beneath them.
    ------------------------------------------------------------------------- */
 
 .plate {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 12px 0 calc(var(--mat) + 2px);
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 13px 18px 15px;
   background: var(--card-bg);
 }
 
 .plate-text {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   min-width: 0;
   gap: 2px;
 }
 
-/* camera maker + model, bold */
-.plate-body {
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  color: var(--card-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* lens, focal length, aperture, shutter, ISO -- quieter */
+/* focal length, aperture, shutter, ISO */
 .plate-spec {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 10px;
-  font-size: 12.5px;
+  justify-content: flex-end;
+  gap: 0 9px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--card-text);
+}
+
+.plate-date {
+  font-size: 12px;
+  font-weight: 400;
   color: var(--card-muted);
 }
 
-/* the maker's mark, right. Empty unless a matching SVG is in assets/logos/. */
+/* the maker's mark. Empty unless a matching SVG is in assets/logos/. */
 .plate-mark {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  color: var(--card-text);
 }
 
 .plate-mark img {
   display: block;
-  height: 17px;
+  height: 14px;
   width: auto;
-  max-width: 120px;
+  max-width: 130px;
   object-fit: contain;
 }
 
+/* The card inverts against the page, so the mark that reads against it is the
+   opposite one: white artwork on the dark card of the light theme, black
+   artwork on the white card of the dark theme. Both are in the DOM, so the
+   toggle swaps them with no reload and no second request. */
+:root[data-theme="light"] .plate-mark .mark-on-light { display: none; }
+:root[data-theme="dark"]  .plate-mark .mark-on-dark  { display: none; }
+
 @media (max-width: 560px) {
-  .plate { gap: 12px; }
-  .plate-body { font-size: 13.5px; }
-  .plate-spec { font-size: 11.5px; gap: 0 8px; }
-  .plate-mark img { height: 14px; }
+  .plate { gap: 10px; padding: 10px 12px 12px; }
+  .plate-spec { font-size: 12px; gap: 0 7px; }
+  .plate-date { font-size: 11px; }
+  .plate-mark img { height: 12px; }
 }
 
 

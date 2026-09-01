@@ -1,20 +1,28 @@
 # Camera maker logos
 
-Optional. Drop an SVG named after the maker, lowercased with anything
-non-alphanumeric removed:
+Optional. Two SVGs per maker, named after the maker lowercased with anything
+non-alphanumeric removed, plus the colour of the artwork:
 
-    sony.svg          for  Make = "SONY"
-    canon.svg         for  Make = "Canon"
-    nikon.svg         for  Make = "NIKON CORPORATION"
-    fujifilm.svg      for  Make = "FUJIFILM"
-    omdigitalsolutions.svg
+    sony_logo_black.svg     for  Make = "SONY"
+    sony_logo_white.svg
+    canon_logo_black.svg    for  Make = "Canon"
+    canon_logo_white.svg
+    nikon_logo_black.svg    for  Make = "NIKON CORPORATION"
+    fujifilm_logo_black.svg for  Make = "FUJIFILM"
 
-If a file is present it is used on the plate under the photograph. If not, that
-corner of the plate is simply left empty. No manufacturer artwork ships with
-this repo, so by default nothing is shown there.
+Both colours are needed because the card inverts against the page: it is a
+dark card on the light theme and a white one on the dark theme. The site puts
+both in the page and shows whichever reads against the card, so the theme
+toggle swaps them instantly with no second request.
 
-Nothing needs rebuilding or re-publishing: the site asks for the file once per
-maker per visit and uses it if it is there. Drop one in and it appears.
+If the pair is missing, that corner of the plate is simply left empty. No
+manufacturer artwork ships with this repo, so by default nothing is shown
+there.
 
-Use a single-colour SVG that inherits `currentColor` where possible, so it
-works in both light and dark themes. Rendered at 17px tall.
+Nothing needs rebuilding or re-publishing: the site asks for the black one
+once per maker per visit and uses the pair if it is there. Drop them in and
+they appear.
+
+Rendered at 14px tall, so use artwork whose proportions suit a wordmark. The
+files are used as-is rather than recoloured, which is why the colour is in the
+name.

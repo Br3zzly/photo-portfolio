@@ -13,9 +13,9 @@
 <link rel="preconnect" href="https://pub-9775c4eec7a34ee9bedf8364e574d557.r2.dev" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600&display=swap">
 
-<link rel="stylesheet" href="assets/style.css?v=27">
+<link rel="stylesheet" href="assets/style.css?v=28">
 
 <script>
   // Runs before first paint, so no saved choice ever flashes the wrong theme.
@@ -39,11 +39,11 @@
 <script type="importmap">
 {
   "imports": {
-    "app/manifest": "./assets/modules/manifest.js?v=27",
-    "app/theme":    "./assets/modules/theme.js?v=27",
-    "app/grid":     "./assets/modules/grid.js?v=27",
-    "app/viewer":   "./assets/modules/viewer.js?v=27",
-    "app/lightbox": "./assets/modules/lightbox.js?v=27"
+    "app/manifest": "./assets/modules/manifest.js?v=28",
+    "app/theme":    "./assets/modules/theme.js?v=28",
+    "app/grid":     "./assets/modules/grid.js?v=28",
+    "app/viewer":   "./assets/modules/viewer.js?v=28",
+    "app/lightbox": "./assets/modules/lightbox.js?v=28"
   }
 }
 </script>
@@ -111,18 +111,20 @@
         <div class="viewer" id="viewer"></div>
       </div>
 
+      <!-- everything sits to the right: the maker's mark, then the settings
+           with the date beneath them -->
       <figcaption class="plate" id="plate">
-        <div class="plate-text">
-          <span class="plate-body" id="m-camera"></span>
-          <span class="plate-spec" id="m-spec"></span>
-        </div>
         <div class="plate-mark" id="m-mark"></div>
+        <div class="plate-text">
+          <span class="plate-spec" id="m-spec"></span>
+          <span class="plate-date" id="m-date"></span>
+        </div>
       </figcaption>
     </figure>
   </div>
 </div>
 
 <script src="assets/openseadragon.min.js" defer></script>
-<script type="module" src="assets/app.js?v=27"></script>
+<script type="module" src="assets/app.js?v=28"></script>
 </body>
 </html>
