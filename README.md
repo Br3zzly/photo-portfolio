@@ -60,7 +60,7 @@ them, since the folder name is part of each photo's id.
 
 ## The plate
 
-An off-white bar under each photograph. Camera maker and model on the left
+A white bar under each photograph. Camera maker and model on the left
 with the lens beneath it, then on the right the maker's mark, the focal
 length, aperture, shutter and ISO, and the date below those. Anything the
 camera did not record is simply left out rather than shown blank, so a stacked
@@ -98,7 +98,7 @@ Every URL the page loads carries a `?v=` query, and they are all set in
 `app.js`. Bump that number whenever you change the CSS or any of the JS:
 
 ```bash
-sed -i 's/?v=28/?v=29/g' index.html
+sed -i 's/?v=30/?v=31/g' index.html
 ```
 
 A browser caches a file under its whole URL, query string and all, so

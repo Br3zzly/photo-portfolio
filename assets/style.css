@@ -19,7 +19,7 @@
      hairline of light around it instead */
   --tile-shadow: 0 14px 34px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .09);
 
-  --card-bg:     #F4F6F8;   /* the plate: off-white, faintly cool */
+  --card-bg:     #FFFFFF;   /* the plate */
   --card-text:   #14171A;
   --card-muted:  #6E7B8A;   /* the blue-grey the lens and date are set in */
   /* the lightbox scrim is not pure black, so a soft shadow still reads */

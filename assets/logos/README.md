@@ -8,8 +8,8 @@ non-alphanumeric removed:
     nikon_logo_black.svg      for  Make = "NIKON CORPORATION"
     fujifilm_logo_black.svg   for  Make = "FUJIFILM"
 
-The plate is always the same off-white, so the artwork always wants to be the
-dark one -- which is what the `_black` in the name is there to remind you of.
+The plate is always white, so the artwork always wants to be the dark one --
+which is what the `_black` in the name is there to remind you of.
 
 If a file is missing, that corner of the plate is simply left empty. No
 manufacturer artwork ships with this repo, so by default nothing is shown
