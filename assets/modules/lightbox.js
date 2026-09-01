@@ -198,8 +198,8 @@ function morph(fromEl, toEl, mutate) {
 
 
 /* --- the plate ------------------------------------------------------------
-   The settings, with the date beneath them and the maker's mark to their left,
-   all set to the right-hand end. Everything is built from what exists, so a
+   Camera and lens on the left; the maker's mark and the settings, with the
+   date beneath them, on the right. Everything is built from what exists, so a
    stacked frame carrying no EXIF at all leaves the plate empty rather than
    rendering blank slots.
    ------------------------------------------------------------------------- */
@@ -232,6 +232,9 @@ const exposure = (shutter) => {
 function fillPlate(photo) {
   const token = ++plateToken;
 
+  el("m-camera").textContent = photo.camera || "";
+  el("m-lens").textContent = photo.lens || "";
+
   const parts = [
     photo.focal,
     fStop(photo.aperture),
@@ -261,11 +264,10 @@ function fillPlate(photo) {
   logoExists(slug).then((exists) => {
     // a fast step through the gallery can land a stale probe here
     if (!exists || token !== plateToken) return;
-    // both go in; the stylesheet shows whichever reads against the card
-    mark.replaceChildren(
-      logoImg(slug, "black", "mark-on-light", photo.make),
-      logoImg(slug, "white", "mark-on-dark", photo.make)
-    );
+    const img = document.createElement("img");
+    img.alt = photo.make || "";
+    img.src = logoUrl(slug);
+    mark.replaceChildren(img);
   });
 }
 
@@ -273,21 +275,14 @@ const makerSlug = (photo) =>
   (photo.make || (photo.camera || "").split(/\s+/)[0] || "")
     .trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-const logoUrl = (slug, variant) => `assets/logos/${slug}_logo_${variant}.svg`;
-
-function logoImg(slug, variant, className, make) {
-  const img = document.createElement("img");
-  img.className = className;
-  img.alt = make || "";
-  img.src = logoUrl(slug, variant);
-  return img;
-}
+/* The plate is always light, so the artwork is always the dark one. */
+const logoUrl = (slug) => `assets/logos/${slug}_logo_black.svg`;
 
 /* A static site cannot list a directory, so whether a maker has artwork is
    settled by asking for it once. The answer is cached per maker rather than
    per photo: a maker with no logo costs one failed request for the whole
-   session instead of one for every photograph viewed. Drop the pair in and
-   they simply appear; leave the folder empty and the mark stays blank. */
+   session instead of one for every photograph viewed. Drop one in and it
+   simply appears; leave the folder empty and the mark stays blank. */
 const logoCache = new Map();
 
 function logoExists(slug) {
@@ -296,7 +291,7 @@ function logoExists(slug) {
       const probe = new Image();
       probe.onload = () => resolve(true);
       probe.onerror = () => resolve(false);
-      probe.src = logoUrl(slug, "black");
+      probe.src = logoUrl(slug);
     }));
   }
   return logoCache.get(slug);
@@ -329,11 +324,16 @@ function sizeCard() {
   const matX = parseFloat(cc.paddingLeft) + parseFloat(cc.paddingRight);
   const matY = parseFloat(cc.paddingTop) + parseFloat(cc.paddingBottom);
 
-  // two passes: the plate can wrap, so its height depends on the width chosen
+  // The plate wraps, so its height depends on the width chosen, and narrowing
+  // the card to fit can be what makes it wrap. Iterate until the height it
+  // reports stops changing rather than assuming one correction is enough.
   let w = availW;
-  for (let pass = 0; pass < 2; pass++) {
+  let plateH = -1;
+  for (let pass = 0; pass < 4; pass++) {
     card.style.width = `${Math.round(w)}px`;
-    const plateH = plate.offsetHeight;
+    const measured = plate.offsetHeight;
+    const settled = measured === plateH;
+    plateH = measured;
 
     let frameW = w - matX;
     let frameH = frameW / ar;
@@ -345,6 +345,7 @@ function sizeCard() {
     }
     card.style.width = `${Math.round(w)}px`;
     card.style.height = `${Math.round(frameH + matY + plateH)}px`;
+    if (settled) break;
   }
 }
 

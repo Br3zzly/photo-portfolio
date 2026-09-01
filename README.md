@@ -60,14 +60,24 @@ them, since the folder name is part of each photo's id.
 
 ## The plate
 
-Under each photograph: camera maker and model in bold, then lens, focal
-length, aperture, shutter and ISO in grey, with the maker's mark on the right.
-Anything the camera did not record is simply left out rather than shown blank.
+An off-white bar under each photograph. Camera maker and model on the left
+with the lens beneath it, then on the right the maker's mark, the focal
+length, aperture, shutter and ISO, and the date below those. Anything the
+camera did not record is simply left out rather than shown blank, so a stacked
+frame with no EXIF at all gets an empty bar.
 
-The mark on the right is empty unless you have supplied artwork. Drop an SVG
-into `assets/logos/` named after the maker -- `sony.svg`, `canon.svg` -- and it
+The aperture is set with the hooked f. A shutter already written as a fraction
+is left alone, since `1/100` needs no unit, while a bare `30` keeps its `s` so
+it cannot be read as a thirtieth.
+
+The mark is empty unless you have supplied artwork. Drop an SVG into
+`assets/logos/` named after the maker -- `sony_logo_black.svg` -- and it
 appears; see the README there. Nothing to rebuild, and no manufacturer artwork
 ships with this repo.
+
+The plate wraps rather than switching at a screen width, because the space it
+has is the card's width and a portrait photograph makes a narrow card even on
+a wide screen.
 
 ## Editing the site
 
@@ -78,7 +88,6 @@ index.html
 assets/style.css
 assets/app.js              entry point: view state and routing
 assets/modules/manifest.js loading the manifest, and where the bucket URL lives
-assets/modules/theme.js    light/dark
 assets/modules/grid.js     the justified gallery
 assets/modules/lightbox.js the card, the plate, and sizing
 assets/modules/viewer.js   OpenSeadragon
@@ -119,11 +128,6 @@ Editing only `index.html` needs no bump; the browser re-checks that on its own.
 And when you are testing your own changes, Ctrl+Shift+R ignores the cache
 entirely -- which is why a change can look live to you and stale to everyone
 else.
-
-## Theme
-
-Dark by default if that is your system setting, light otherwise. The toggle in
-the corner overrides it and the choice is remembered per browser.
 
 ## Removing photographs
 

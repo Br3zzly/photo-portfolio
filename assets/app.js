@@ -7,7 +7,6 @@
      ?id=Kyoto/temple   -> a photograph, over whichever view it belongs to */
 
 import { loadManifest } from "app/manifest";
-import { initTheme } from "app/theme";
 import { renderGrid, tileImageFor } from "app/grid";
 import { initLightbox, showPhoto, hidePhoto, isOpen } from "app/lightbox";
 
@@ -23,7 +22,6 @@ let index  = -1;        // index into shown; -1 means nothing is open
 let renderedFor;        // which view the grid currently holds
 let booted = false;     // suppresses the morph on the very first route
 
-initTheme(document.getElementById("theme-toggle"));
 initLightbox({ onClose: closeToGallery, onStep: step });
 backBtn.addEventListener("click", () => go(location.pathname));
 
