@@ -3,7 +3,7 @@
    Image and plate are sized together as a single object, so the plate is
    always exactly as wide as the photograph above it. */
 
-import { aspect, tileUrl } from "app/manifest";
+import { aspect, tileUrl, thumbUrl } from "app/manifest";
 import {
   showTiles, refit, goHome, closeTiles, isZoomedIn, toggleZoom,
 } from "app/viewer";
@@ -60,7 +60,7 @@ export function showPhoto(photo, { hasPrev, hasNext, fromTile }) {
   if (opening && canMorph()) {
     // No rAF: display and opacity change in the same frame, so the fade never
     // runs and the view transition owns the whole animation.
-    morph(fromTile, frame, () => {
+    morph(fromTile, card, () => {
       reveal();
       enter(false);
     });
@@ -83,7 +83,7 @@ export function hidePhoto({ toTile } = {}) {
   const finish = () => { if (gen === generation) teardown(); };
 
   if (canMorph()) {
-    morph(frame, toTile, finish);
+    morph(card, toTile, finish);
     return;
   }
 
@@ -114,7 +114,14 @@ function present(photo, hasPrev, hasNext, { animateSize }) {
 
   // the outgoing canvas still holds the previous photograph
   lightbox.classList.add("swapping");
-  placeholder.src = photo.lqip || "";
+
+  // The grid's thumbnail, which the browser already has, rather than the 24px
+  // preview inlined in the manifest: it fills the card at a sensible sharpness
+  // the instant it opens, and OpenSeadragon then sharpens it further. The
+  // inlined preview stays as the backdrop for the rare case where the
+  // thumbnail is not cached yet.
+  placeholder.style.backgroundImage = photo.lqip ? `url("${photo.lqip}")` : "";
+  placeholder.src = thumbUrl(photo.id, photo.rev);
   placeholder.classList.remove("hidden");
   viewerEl.classList.remove("ready");
 
@@ -147,10 +154,17 @@ function loadTiles(photo) {
 
 
 /* --- the morph -----------------------------------------------------------
-   The thumbnail and the card's frame take turns holding one view-transition
-   name, so the browser treats them as a single object moving between two
-   places. Only one element may carry the name at a time, which is why it is
-   handed over inside the callback that defines the new state.
+   The tile and the card take turns holding one view-transition name, so the
+   browser treats them as a single object moving between two places. Only one
+   element may carry the name at a time, which is why it is handed over inside
+   the callback that defines the new state.
+
+   Both ends are the outer element rather than the photograph inside, for two
+   reasons: each carries its own rounded corners and clips to them, so the
+   snapshots keep them for the whole move, and naming the card rather than its
+   frame takes the plate along -- otherwise the plate is left to the root
+   cross-fade and simply appears, at full size, under a photograph still on its
+   way in.
    ------------------------------------------------------------------------- */
 
 const canMorph = () =>

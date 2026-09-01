@@ -50,8 +50,10 @@ function photoTile(photo, i, onPhoto) {
   const tile = tileShell(aspect(photo.width, photo.height), photo.title || photo.id);
   const img = thumbImg(photo.id, photo.rev, photo.width, photo.height, photo.lqip, photo.title);
   tile.appendChild(img);
-  // the image is handed back so the open animation can morph it into the card
-  tile.addEventListener("click", () => onPhoto(photo, i, img));
+  // The tile itself is handed back, not the image inside it: the tile is what
+  // carries the rounded corners, so it is what the open animation should morph
+  // into the card. Snapshotting the square image instead loses them.
+  tile.addEventListener("click", () => onPhoto(photo, i, tile));
   return tile;
 }
 
@@ -79,7 +81,6 @@ function albumTile(a, onAlbum) {
 }
 
 /* The tile showing a given photo, so closing can morph the card back into it. */
-export function tileImageFor(grid, indexInPhotos, albumCount) {
-  const tile = grid.children[albumCount + indexInPhotos];
-  return tile ? tile.querySelector("img") : null;
+export function tileAt(grid, indexInPhotos, albumCount) {
+  return grid.children[albumCount + indexInPhotos] || null;
 }

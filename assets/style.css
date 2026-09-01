@@ -348,8 +348,13 @@ body.lightbox-open .back { display: none; }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: blur(18px);
-  transform: scale(1.04);
+  /* the inlined preview behind the thumbnail, for the moment before it paints */
+  background-size: cover;
+  background-position: center;
+  /* only enough blur to take the edge off a thumbnail shown larger than it was
+     made; it used to hide a 24px preview, which needed far more */
+  filter: blur(4px);
+  transform: scale(1.02);
   opacity: 1;
   transition: opacity .45s ease .1s;
   pointer-events: none;
@@ -555,6 +560,9 @@ body.lightbox-open .back { display: none; }
   height: 100%;
   width: 100%;
   object-fit: cover;
+  /* the tile and the card round to different radii, so pin one for the move
+     rather than letting the two snapshots disagree part-way across */
+  border-radius: var(--card-radius);
 }
 
 

@@ -7,7 +7,7 @@
      ?id=Kyoto/temple   -> a photograph, over whichever view it belongs to */
 
 import { loadManifest } from "app/manifest";
-import { renderGrid, tileImageFor } from "app/grid";
+import { renderGrid, tileAt } from "app/grid";
 import { initLightbox, showPhoto, hidePhoto, isOpen } from "app/lightbox";
 
 const grid     = document.getElementById("grid");
@@ -91,8 +91,8 @@ function showView(name) {
   renderGrid(grid, {
     photos: shown,
     albums: album ? [] : albums,
-    onPhoto: (photo, i, img) => {
-      open(i, img);
+    onPhoto: (photo, i, tile) => {
+      open(i, tile);
       history.pushState({}, "", photoUrl(photo.id));
     },
     onAlbum: (a) => go(`${location.pathname}?album=${encodeURIComponent(a.name)}`),
@@ -109,7 +109,7 @@ const photoUrl = (id) => `${location.pathname}?id=${encodeURIComponent(id)}`;
 /* Albums are rendered before photographs in the same grid, so a photograph's
    tile sits that many children further along. */
 const tileFor = (i) =>
-  i < 0 ? null : tileImageFor(grid, i, album ? 0 : albums.length);
+  i < 0 ? null : tileAt(grid, i, album ? 0 : albums.length);
 
 
 /* --- the open photograph -------------------------------------------------
