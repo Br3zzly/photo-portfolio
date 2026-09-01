@@ -307,7 +307,10 @@ body.lightbox-open .back { display: none; }
   margin: 0;
   display: flex;
   flex-direction: column;
-  background: var(--card-bg);
+  /* No background of its own. White behind the photograph fringes along
+     its edges and shows as a border the moment the viewer is zoomed out,
+     so only the plate below is white. */
+  background: none;
   border-radius: var(--card-radius);
   /* The photograph runs edge to edge; the plate underneath is the only border
      it gets. Clipping here rounds the top of the photograph to match the card,
@@ -334,6 +337,9 @@ body.lightbox-open .back { display: none; }
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  /* black, not the plate's white: nothing shows through while tiles load,
+     and nothing pale can peek out at the photograph's edges */
+  background: #000;
 }
 
 .placeholder {
@@ -472,7 +478,6 @@ body.lightbox-open .back { display: none; }
   .plate-date { font-size: 11px; }
   .plate-right { gap: 10px; }
   .plate-mark img { height: 12px; }
-}
 }
 
 

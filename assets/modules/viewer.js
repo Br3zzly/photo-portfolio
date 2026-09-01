@@ -28,7 +28,9 @@ function create(element, tileSources) {
     gestureSettingsMouse: { clickToZoom: false, dblClickToZoom: false },
     gestureSettingsTouch: { pinchRotate: false, clickToZoom: false, dblClickToZoom: false },
     maxZoomPixelRatio: 2,
-    minZoomImageRatio: 0.9,
+    // 1, not the default 0.9: the photograph fills the frame exactly, so any
+    // zooming out past the fit just opens gaps around it
+    minZoomImageRatio: 1,
     visibilityRatio: 1,
     constrainDuringPan: true,
     springStiffness: 7.5,
