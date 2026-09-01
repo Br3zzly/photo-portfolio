@@ -110,15 +110,34 @@ def clear_staging():
 
 # --- jobs -------------------------------------------------------------------
 
-def start_job(fn):
+def start_job(fn, total=0, label=""):
+    """
+    Run `fn` on a thread and let the page watch it.
+
+    The page shows a bar, not a transcript, so the job reports how far along it
+    is as well as what it is saying. The full detail still goes to the terminal.
+    """
     job_id = f"{int(time.time()*1000)}"
     with LOCK:
-        STATE["jobs"][job_id] = {"lines": [], "done": False, "error": None}
+        STATE["jobs"][job_id] = {"lines": [], "done": False, "error": None,
+                                 "total": total, "step": 0, "label": label}
 
-    def log(line):
+    def log(line, label=None):
         with LOCK:
-            STATE["jobs"][job_id]["lines"].append(str(line))
+            job = STATE["jobs"][job_id]
+            job["lines"].append(str(line))
+            if label is not None:
+                job["label"] = label
         print(line, flush=True)
+
+    def step(label=None):
+        with LOCK:
+            job = STATE["jobs"][job_id]
+            job["step"] += 1
+            if label is not None:
+                job["label"] = label
+
+    log.step = step
 
     def run():
         try:
@@ -158,7 +177,7 @@ def publish_job(edits):
             if not entry.get("album"):
                 entry.pop("album", None)
 
-            log(f"  {photo_id}")
+            log(f"  {photo_id}", label=photo_id)
             t0 = time.time()
             (count, total), cached, rev = pipeline.make_tiles(
                 src, photo_id, force=True, rotate=rotate)
@@ -173,35 +192,40 @@ def publish_job(edits):
             # only once it is safely in the bucket
             store.discard_local(photo_id)
             published += 1
+            log.step()
 
         if not published:
             log("nothing published")
             return
 
-        log("updating the manifest")
+        log("updating the manifest", label="Updating the manifest")
         store.save(manifest)
+        log.step()
         with LOCK:
             STATE["manifest"] = manifest
         clear_staging()
         log(f"done -- {published} photograph{'s' if published != 1 else ''} live")
 
-    return start_job(work)
+    return start_job(work, total=len(edits) + 1, label="Preparing")
 
 
 def delete_job(ids):
     def work(log):
         manifest = store.load()
         for photo_id in ids:
+            log(f"  {photo_id}", label=photo_id)
             store.purge(photo_id, log=log)
             store.discard_local(photo_id)
+            log.step()
         store.drop(manifest, ids)
-        log("updating the manifest")
+        log("updating the manifest", label="Updating the manifest")
         store.save(manifest)
+        log.step()
         with LOCK:
             STATE["manifest"] = manifest
         log(f"done -- removed {len(ids)} photograph{'s' if len(ids) != 1 else ''}")
 
-    return start_job(work)
+    return start_job(work, total=len(ids) + 1, label="Deleting")
 
 
 def human(n):
