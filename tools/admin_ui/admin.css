@@ -1,0 +1,329 @@
+/* ---------------------------------------------------------------------------
+   The admin console. The gallery's palette and type, with the chrome the live
+   site does not have: a bar across the top, a delete control on every tile.
+   Deliberately not the site's stylesheet -- this is a tool, and it should not
+   break because the gallery was restyled.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --ground:    #000000;
+  --raised:    #0D0D0D;
+  --hairline:  #262626;
+  --text:      #F5F3F0;
+  --muted:     #8C8C8C;
+  --danger:    #C4553D;
+  --good:      #6E9E78;
+  --plate:     #FFFFFF;
+  --plate-text:#14171A;
+  --plate-mute:#6E7B8A;
+
+  --sans: "Readex Pro", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --radius: 6px;
+  --ease: cubic-bezier(.22, .61, .36, 1);
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--sans);
+  font-weight: 300;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- top bar -------------------------------------------------------------- */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  background: rgba(0, 0, 0, .82);
+  border-bottom: 1px solid var(--hairline);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.bar-title { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+.bar-sub { color: var(--muted); font-weight: 300; }
+.bar-actions { display: flex; align-items: center; gap: 10px; }
+.count { color: var(--muted); font-size: 13px; margin-right: 4px; }
+
+.btn {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13.5px;
+  transition: border-color .2s ease, background .2s ease;
+}
+
+.btn:hover { border-color: var(--muted); background: var(--raised); }
+.btn:focus-visible { outline: 2px solid var(--good); outline-offset: 2px; }
+.btn.primary { background: var(--text); color: #000; border-color: var(--text); }
+.btn.primary:hover { background: #fff; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn[disabled] { opacity: .45; pointer-events: none; }
+
+/* --- the gallery ---------------------------------------------------------- */
+
+.status { padding: 26px 22px; color: var(--muted); font-size: 14px; }
+.status.error { color: var(--danger); }
+.status[hidden] { display: none; }
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px;
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
+/* the same proportional growth the gallery uses, so a row justifies honestly */
+.card {
+  --ar: 1.5;
+  position: relative;
+  flex-grow: var(--ar);
+  flex-shrink: 1;
+  flex-basis: calc(var(--ar) * 220px);
+  aspect-ratio: var(--ar);
+  max-width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--raised);
+}
+
+.card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(.92);
+  transition: filter .3s ease;
+}
+
+.card:hover img { filter: brightness(1); }
+
+.card-meta {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 22px 12px 9px;
+  font-size: 12px;
+  color: #fff;
+  background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,0));
+  pointer-events: none;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-id { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-album { color: #cfd6dd; }
+
+.card-del {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 30px; height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(0,0,0,.55);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .2s ease, background .2s ease, border-color .2s ease;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.card:hover .card-del,
+.card-del:focus-visible { opacity: 1; }
+.card-del:hover { background: var(--danger); border-color: var(--danger); }
+
+/* --- drop target ---------------------------------------------------------- */
+
+.drop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  place-items: center;
+  background: rgba(0,0,0,.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.drop.on { display: grid; }
+
+.drop-inner {
+  border: 2px dashed var(--muted);
+  border-radius: 14px;
+  padding: 46px 62px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.drop-note { color: var(--muted); font-size: 13px; }
+
+/* --- sheets --------------------------------------------------------------- */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow-y: auto;
+  background: var(--ground);
+  padding-bottom: 40px;
+}
+
+.sheet[hidden] { display: none; }
+
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px;
+  background: rgba(0,0,0,.9);
+  border-bottom: 1px solid var(--hairline);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.sheet-head h2 { margin: 0; font-size: 17px; font-weight: 500; }
+.sheet-sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.sheet-actions { display: flex; gap: 10px; }
+
+/* --- review --------------------------------------------------------------- */
+
+.review-list { max-width: 1100px; margin: 0 auto; padding: 22px; }
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(220px, 340px) 1fr;
+  gap: 22px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.item.skipped { opacity: .38; }
+
+.item-preview { position: relative; }
+
+.item-preview img {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+
+.item-tools { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+.item-name {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 8px;
+  word-break: break-all;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 14px;
+  align-content: start;
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field.wide { grid-column: 1 / -1; }
+.field label { font-size: 12px; color: var(--muted); }
+
+.field input {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--muted);
+}
+
+.field input::placeholder { color: #5a5a5a; }
+
+.warn {
+  grid-column: 1 / -1;
+  border-left: 2px solid var(--danger);
+  padding: 6px 0 6px 12px;
+  color: #d8c9c4;
+  font-size: 12.5px;
+}
+
+/* --- log ------------------------------------------------------------------ */
+
+.log-body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 22px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.log-body .ok { color: var(--good); }
+.log-body .bad { color: var(--danger); }
+
+/* --- confirm -------------------------------------------------------------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.modal[hidden] { display: none; }
+
+.modal-card {
+  width: min(460px, calc(100vw - 40px));
+  background: var(--raised);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 22px;
+}
+
+.modal-card h3 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+.modal-body { margin: 0 0 18px; color: var(--muted); font-size: 13.5px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+@media (max-width: 700px) {
+  .item { grid-template-columns: 1fr; }
+  .bar { flex-wrap: wrap; }
+}

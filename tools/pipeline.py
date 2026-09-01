@@ -1,8 +1,12 @@
 """
-Image processing: EXIF, tiles, thumbnails, placeholders, sidecar metadata.
+Image processing: EXIF, tiles, thumbnails, placeholders.
 
 Everything here is idempotent -- running it twice does not redo work or
 duplicate anything, unless force=True.
+
+Nothing here knows where a photograph came from or where its metadata ends up.
+It is handed a path and an id, and it produces files. The admin server decides
+the rest.
 """
 
 import base64
@@ -18,9 +22,9 @@ from pathlib import Path
 import config
 
 ROOT = Path(__file__).resolve().parent.parent
-PHOTOS_DIR = ROOT / "photos"
-TILES_DIR = ROOT / "tiles"
-THUMBS_DIR = ROOT / "thumbs"
+TILES_DIR = ROOT / "tiles"          # built, uploaded, then removed
+THUMBS_DIR = ROOT / "thumbs"        # same
+STAGING_DIR = ROOT / ".staging"     # picked originals, while they are worked on
 
 
 # --- locating the external tools --------------------------------------------
@@ -354,40 +358,3 @@ def make_lqip(src, rotate=0):
     data = tmp.read_bytes()
     tmp.unlink(missing_ok=True)
     return "data:image/webp;base64," + base64.b64encode(data).decode("ascii")
-
-
-# --- sidecar metadata -------------------------------------------------------
-# The sidecar next to each source photo is the durable source of truth. The
-# bucket manifest is generated from these, so a lost manifest costs nothing.
-
-def sidecar_path(photo_id):
-    return PHOTOS_DIR / f"{photo_id}.json"
-
-
-def load_sidecar(photo_id):
-    p = sidecar_path(photo_id)
-    if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
-    return None
-
-
-def save_sidecar(photo_id, data):
-    p = sidecar_path(photo_id)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    # utf-8 with no BOM: json.loads in the browser rejects a BOM
-    p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def init_sidecar(src, photo_id):
-    """Build a fresh sidecar prefilled from whatever EXIF exists."""
-    w, h = dimensions(src)
-    data = {
-        "id": photo_id,
-        "title": "",
-        "caption": "",
-        "width": w,
-        "height": h,
-        "extra": {},
-    }
-    data.update(read_exif(src))
-    return data

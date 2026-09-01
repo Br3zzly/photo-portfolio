@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio — admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-title">
+    Portfolio <span class="bar-sub">admin</span>
+  </div>
+  <div class="bar-actions">
+    <span id="count" class="count"></span>
+    <button id="add-files" class="btn">Add photos…</button>
+    <button id="add-folder" class="btn">Add folder as album…</button>
+  </div>
+</header>
+
+<!-- The pickers. Hidden: the buttons above drive them, so the browser's own
+     file dialog is what opens. A folder pick carries webkitRelativePath, which
+     is where the album name comes from. -->
+<input id="pick-files"  type="file" multiple accept="image/*" hidden>
+<input id="pick-folder" type="file" multiple webkitdirectory hidden>
+
+<main>
+  <p id="status" class="status">Loading the manifest…</p>
+  <div id="grid" class="grid"></div>
+</main>
+
+<!-- dropping anywhere on the page stages the files -->
+<div id="drop" class="drop">
+  <div class="drop-inner">Drop photographs to add them<br>
+    <span class="drop-note">a folder becomes an album</span></div>
+</div>
+
+<!-- The review sheet: everything picked, one after another, with whatever the
+     camera recorded already filled in. -->
+<section id="review" class="sheet" hidden>
+  <div class="sheet-head">
+    <div>
+      <h2 id="review-title">Review</h2>
+      <p id="review-sub" class="sheet-sub"></p>
+    </div>
+    <div class="sheet-actions">
+      <button id="review-cancel" class="btn">Discard</button>
+      <button id="review-publish" class="btn primary">Publish</button>
+    </div>
+  </div>
+  <div id="review-list" class="review-list"></div>
+</section>
+
+<!-- progress, and the only place errors surface -->
+<section id="log" class="sheet log" hidden>
+  <div class="sheet-head">
+    <h2 id="log-title">Working…</h2>
+    <button id="log-close" class="btn" hidden>Close</button>
+  </div>
+  <pre id="log-body" class="log-body"></pre>
+</section>
+
+<div id="confirm" class="modal" hidden>
+  <div class="modal-card">
+    <h3 id="confirm-title">Delete?</h3>
+    <p id="confirm-body" class="modal-body"></p>
+    <div class="modal-actions">
+      <button id="confirm-no" class="btn">Cancel</button>
+      <button id="confirm-yes" class="btn danger">Delete from Cloudflare</button>
+    </div>
+  </div>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

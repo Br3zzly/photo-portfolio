@@ -7,56 +7,48 @@ instead of downloading 35 MB up front.
 Site is static and hosted on GitHub Pages. Tiles, thumbnails and the photo
 manifest live in a Cloudflare R2 bucket, which has no egress fees.
 
-## Publishing a photo
+## The admin console
 
-Drop a full-resolution JPEG into `photos/`, then:
+Everything is done from one place:
 
 ```bash
-python tools/publish.py
+python tools/admin.py
 ```
 
-It reads the EXIF from every new photo, then opens **one page in one tab**
-where you walk the whole batch: arrow keys to move, `S` to skip a frame you do
-not want published, `Ctrl+Enter` when you are done. After that it tiles
-everything you kept, uploads to R2 and refreshes the manifest without further
-input. No commit required.
+That opens your published gallery in a browser with the two controls the live
+site must never have: a delete button on every photograph, and a way to add
+more. It runs entirely on this machine, which is the point -- tiling needs
+vips, and the credentials that write to the bucket are yours and stay here.
+An admin panel on the published site would need both, and anyone could read
+the second one out of it.
 
-Re-running is always safe. Already-published photos are skipped, and the
-upload syncs everything the manifest references -- so an interrupted run is
-fixed simply by running it again.
+**Adding.** *Add photos…* opens a file picker; *Add folder as album…* picks a
+whole folder and its name becomes the album. Dragging either onto the page
+does the same. Then you walk what you picked: rotate anything the camera
+tagged wrongly, fill in whatever it did not record, skip the frames you do not
+want, and publish the rest.
 
-Useful flags:
+Your originals are read, not taken. They are copied into `.staging/` for as
+long as it takes to read the EXIF, build the pyramid and push it, and the copy
+is deleted afterwards. Where you keep the originals is your business, and the
+repository never holds one.
 
-| Flag | What it does |
-|---|---|
-| `--force` | Redo tiles and metadata that already exist |
-| `--no-upload` | Process locally, upload later |
-| `--no-browser` | Print the review URL instead of opening a browser |
-
-You can also name a single file: `python tools/publish.py photos/whatever.jpg`
+**Deleting.** The button on a tile removes that photograph's tiles and
+thumbnail from the bucket, drops it from the manifest, and that is all. It
+deletes every revision, not just the one the manifest names, so a photograph
+re-tiled at some point leaves nothing behind. Nothing on this machine is
+touched and your original is wherever you keep it -- but there is no undo, and
+the metadata you typed is gone with it.
 
 ## Albums
 
-A subfolder of `photos/` is an album, named after the folder. Nothing to
-configure.
-
-```
-photos/
-  sunset.jpg          loose -- appears on the home page
-  Kyoto/
-    temple.jpg        album "Kyoto"
-    garden.jpg
-  Hong Kong/
-    tram.jpg          album "Hong Kong"
-```
-
+An album is a folder you picked, named after the folder. Nothing to configure.
 Albums appear as tiles in the same grid as loose photographs, with the album
-name in the corner. Clicking one opens that album; clicking a photo opens the
-viewer, and prev/next then walk that album rather than the whole collection.
+name in the corner. Clicking one opens that album; prev/next then walk that
+album rather than the whole collection. The cover is its newest photograph.
 
-The album cover is its newest photo. Rename the folder to rename the album --
-though the old tiles stay in the bucket under the old name until you delete
-them, since the folder name is part of each photo's id.
+Only one level deep: a folder inside a picked folder is flattened into the
+same album, because an id carries one folder name and no more.
 
 ## The plate
 
@@ -129,23 +121,6 @@ And when you are testing your own changes, Ctrl+Shift+R ignores the cache
 entirely -- which is why a change can look live to you and stale to everyone
 else.
 
-## Removing photographs
-
-```bash
-python tools/unpublish.py LL_06601
-python tools/unpublish.py "LL_066*"        # patterns work
-python tools/unpublish.py "LL_066*" --yes  # skip the confirmation
-```
-
-Deletes the tiles and thumbnail locally and from the bucket, drops the
-sidecar, refreshes the manifest, and moves your original into `archive/` --
-otherwise the next publish run would simply put it back. Nothing you shot is
-ever deleted. Move the file back into `photos/` and publish again to undo.
-
-Removing a lot at once is slow: each photo is a few hundred objects in the
-bucket, so expect a minute or two per few thousand. It prints progress as it
-goes.
-
 ## Requirements
 
 ```bash
@@ -160,21 +135,33 @@ bucket. Settings live in `tools/config.py`.
 ## How it fits together
 
 ```
-photos/name.jpg          your original, never committed
-photos/name.json         metadata you confirmed -- committed, this is the backup
-tiles/name_files/        generated pyramid, uploaded to R2, never committed
-thumbs/name.webp         gallery thumbnail, uploaded to R2, never committed
+this repository          the site, and the tools that publish to it
+  index.html             the gallery
+  assets/                its stylesheet and modules
+  tools/admin.py         the console: pick, review, publish, delete
+  tools/pipeline.py      EXIF, tiles, thumbnails, placeholders
+  tools/store.py         the manifest, and the bucket
+
+.staging/                a picked original, only while it is being worked on
+tiles/  thumbs/          generated, uploaded, then deleted
 
 R2 bucket/
-  photos.json            the manifest the site reads at runtime
+  photos.json            the manifest, and the only record of a photograph
   name.dzi               tile pyramid descriptor
   name_files/            ~370 WebP tiles for a 66 MP photo, about 3 MB
-  thumbs/name.webp
+  thumbs/name__rev.webp
 ```
 
-The site fetches `photos.json` from the bucket on load, so publishing never
-touches this repository. The sidecar JSON files are committed purely as a
-backup of metadata you typed by hand.
+Nothing here is a copy of anything. The originals live wherever you keep them,
+the generated files are deleted once they are in the bucket, and the manifest
+is the only record that a photograph exists.
+
+That last part is worth being plain about: **the metadata you type by hand
+exists only in `photos.json` in the bucket.** There is no sidecar beside the
+original any more and no copy in git, so nothing can regenerate it. Delete a
+photograph and its title, caption and settings go with it; publish it again and
+you type them again. That was the deliberate trade for not keeping a source
+folder.
 
 ## Notes
 
@@ -187,5 +174,8 @@ backup of metadata you typed by hand.
   serve tiles as `immutable` for a year -- an edited photo can never collide
   with a cached copy of its old self. Thumbnails work the same way.
 - The manifest is cached for a minute, so new photos appear quickly.
-- Export sRGB. The publish script warns if a photo is not sRGB.
-- GPS is never published. The script warns if a source file contains it.
+- Export sRGB. The review step warns if a photo is not sRGB.
+- GPS is never published. The review step warns if a source file has any.
+- The console reads and writes the manifest through rclone rather than the
+  public URL, so it uses the same credentials that write the bucket and never
+  sees a stale CDN copy.
