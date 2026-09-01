@@ -85,10 +85,40 @@ assets/modules/viewer.js   OpenSeadragon
 ```
 
 Every URL the page loads carries a `?v=` query, and they are all set in
-`index.html` -- the stylesheet link and the import map that names the modules.
-Bump that number whenever you change any of these files, otherwise GitHub Pages
-will keep serving the cached copy for about ten minutes and your change will
-look like it did not work.
+`index.html` -- the stylesheet link, the import map that names the modules, and
+`app.js`. Bump that number whenever you change the CSS or any of the JS:
+
+```bash
+sed -i 's/?v=27/?v=28/g' index.html
+```
+
+A browser caches a file under its whole URL, query string and all, so
+`style.css?v=28` is a file it has never seen and has to fetch. The server
+ignores the query -- it hands back `assets/style.css` either way. Changing the
+URL is the entire point.
+
+What this does *not* do is get your change out any faster. Pages serves
+everything, `index.html` included, with `Cache-Control: max-age=600`, and for
+those ten minutes a browser does not even ask whether the file changed. Since
+the version numbers live inside `index.html`, someone holding a cached copy of
+it cannot see that you bumped them.
+
+What it prevents is a mismatched pair. Left alone, `index.html` and
+`style.css` are cached separately and fall out of date at different moments, so
+a visitor can end up running new markup against an old stylesheet -- which
+looks far worse than simply being ten minutes behind. Bumping guarantees that
+new HTML can only ever point at assets the browser must go and fetch, so the
+two always arrive as a set.
+
+Tiles and thumbnails need none of this. Their paths carry a fingerprint of the
+file's contents, so re-tiling a photo changes the URL by itself and they are
+served `immutable` for a year. `?v=` is the same idea worked by hand, which is
+the right trade when there is no build step to compute hashes.
+
+Editing only `index.html` needs no bump; the browser re-checks that on its own.
+And when you are testing your own changes, Ctrl+Shift+R ignores the cache
+entirely -- which is why a change can look live to you and stale to everyone
+else.
 
 ## Theme
 
