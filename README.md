@@ -64,14 +64,31 @@ Under each photograph: camera maker and model in bold, then lens, focal
 length, aperture, shutter and ISO in grey, with the maker's mark on the right.
 Anything the camera did not record is simply left out rather than shown blank.
 
-The mark is the maker's name as a wordmark by default. Drop an SVG into
-`assets/logos/` (see the README there) to use real artwork instead.
+The mark on the right is empty unless you have supplied artwork. Drop an SVG
+into `assets/logos/` named after the maker -- `sony.svg`, `canon.svg` -- and it
+appears; see the README there. Nothing to rebuild, and no manufacturer artwork
+ships with this repo.
 
 ## Editing the site
 
-`index.html` loads the CSS and JS with a `?v=` query. Bump it whenever you
-change either file, otherwise GitHub Pages will keep serving the cached copy
-for about ten minutes and your change will look like it did not work.
+The site is plain ES modules -- no build step, no dependencies to install.
+
+```
+index.html
+assets/style.css
+assets/app.js              entry point: view state and routing
+assets/modules/manifest.js loading the manifest, and where the bucket URL lives
+assets/modules/theme.js    light/dark
+assets/modules/grid.js     the justified gallery
+assets/modules/lightbox.js the card, the plate, and sizing
+assets/modules/viewer.js   OpenSeadragon
+```
+
+Every URL the page loads carries a `?v=` query, and they are all set in
+`index.html` -- the stylesheet link and the import map that names the modules.
+Bump that number whenever you change any of these files, otherwise GitHub Pages
+will keep serving the cached copy for about ten minutes and your change will
+look like it did not work.
 
 ## Theme
 

@@ -129,7 +129,7 @@ def read_exif(src):
         return md or mk
 
     make = clean(raw.get("Make"))
-    # some bodies write "NIKON CORPORATION"; the wordmark is just the brand
+    # some bodies write "NIKON CORPORATION"; the mark is just the brand
     make = make.replace(" CORPORATION", "").replace(" Corporation", "").strip()
     model = clean(raw.get("Model"))
     camera = join_make_model(make, model)
@@ -155,7 +155,7 @@ def read_exif(src):
 
     return {
         "camera": camera,
-        # kept separately so the plate can show the maker's wordmark
+        # kept separately so the plate can look up the maker's logo
         "make": make,
         "lens": lens,
         "focal": focal,

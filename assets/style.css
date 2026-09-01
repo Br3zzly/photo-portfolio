@@ -2,10 +2,12 @@
    Two palettes. Dark is true black, which is what OLED phones actually turn
    off pixels for. Light is warm paper rather than inverted dark, so the
    gallery reads like white walls instead of a UI with the lights flipped.
+
+   The inline script in <head> resolves the system preference before first
+   paint and writes the answer to data-theme, so there is exactly one dark
+   block here rather than one for the media query and one for the toggle.
    --------------------------------------------------------------------------- */
 
-/* Light is the base. Dark overrides follow, once for the system preference
-   and once for an explicit choice, so the toggle wins in both directions. */
 :root {
   --ground:    #FFFFFF;
   --raised:    #F4F3F1;
@@ -17,12 +19,15 @@
   --chip:      rgba(255, 255, 255, .72);
   --shade:     0.97;      /* resting brightness on thumbnails */
 
+  /* a lifted tile casts a real shadow on paper */
+  --tile-shadow: 0 12px 28px rgba(20, 18, 15, .16), 0 3px 8px rgba(20, 18, 15, .10);
+
   /* The card deliberately inverts against the page -- a dark mat on a light
      ground, a white one on black. It reads like a mounted print, so the
      plate's text has to invert with it. */
-  --card-bg:    #0A0A0A;
-  --card-text:  #F5F3F0;
-  --card-muted: #8C8C8C;
+  --card-bg:     #0A0A0A;
+  --card-text:   #F5F3F0;
+  --card-muted:  #8C8C8C;
   --card-shadow: 0 2px 6px rgba(0,0,0,.18), 0 18px 50px rgba(0,0,0,.26);
   --mat: clamp(10px, 1.1vw, 16px);   /* border around the photograph */
 
@@ -31,28 +36,10 @@
   --gap: 14px;
   --row: 300px;          /* target row height in the justified grid */
   --pad: clamp(20px, 4vw, 56px);
+  --radius: 6px;
+  --ease: cubic-bezier(.22, .61, .36, 1);
 
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground:    #000000;
-    --raised:    #0D0D0D;
-    --hairline:  #262626;
-    --text:      #F5F3F0;
-    --muted:     #8C8C8C;
-    --safelight: #C4553D;
-    --scrim:     rgba(0, 0, 0, .78);
-    --chip:      rgba(0, 0, 0, .55);
-    --shade:     0.92;
-    --card-bg:    #FFFFFF;
-    --card-text:  #14120F;
-    --card-muted: #6E6862;
-    /* the lightbox scrim is not pure black, so a soft shadow still reads */
-    --card-shadow: 0 2px 10px rgba(0,0,0,.6), 0 22px 60px rgba(0,0,0,.7);
-    color-scheme: dark;
-  }
 }
 
 :root[data-theme="dark"] {
@@ -65,11 +52,17 @@
   --scrim:     rgba(0, 0, 0, .78);
   --chip:      rgba(0, 0, 0, .55);
   --shade:     0.92;
-  --card-bg:    #FFFFFF;
-  --card-text:  #14120F;
-  --card-muted: #6E6862;
+
+  /* a shadow is invisible on true black, so the lift is carried by a hairline
+     of light around the tile instead */
+  --tile-shadow: 0 14px 34px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .09);
+
+  --card-bg:     #FFFFFF;
+  --card-text:   #14120F;
+  --card-muted:  #6E6862;
   /* the lightbox scrim is not pure black, so a soft shadow still reads */
   --card-shadow: 0 2px 10px rgba(0,0,0,.6), 0 22px 60px rgba(0,0,0,.7);
+
   color-scheme: dark;
 }
 
@@ -82,7 +75,12 @@
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* reserve the scrollbar so opening the lightbox, which locks scrolling,
+     cannot shift the page sideways underneath it */
+  scrollbar-gutter: stable;
+}
 
 body {
   margin: 0;
@@ -96,19 +94,23 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* The gallery is what gets blurred behind the lightbox. Isolating it keeps
-   the blur cheap and stops it bleeding into fixed UI. */
 body.lightbox-open { overflow: hidden; }
 
+
 /* --- justified grid ------------------------------------------------------
-   Each tile grows in proportion to its aspect ratio, so a row of photos fills
-   the width exactly and every photograph keeps its true shape. No cards, no
-   borders, no shadows: the photographs are the only bright things on the page.
+   Each tile grows in proportion to its aspect ratio, so a row fills the width
+   exactly and every photograph keeps its true shape.
+
+   Both the basis and the grow factor scale with --ar, which is what makes the
+   row justify honestly. Growing every tile by the same amount instead would
+   widen a narrow photograph far more, in proportion, than a wide one, and
+   leave object-fit to crop away the difference.
    ------------------------------------------------------------------------- */
 
 .grid {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: var(--gap);
   padding: var(--pad);
   max-width: 1700px;
@@ -116,6 +118,7 @@ body.lightbox-open { overflow: hidden; }
 }
 
 .tile {
+  --ar: 1.5;             /* replaced per tile from the manifest */
   position: relative;
   display: block;
   padding: 0;
@@ -123,11 +126,15 @@ body.lightbox-open { overflow: hidden; }
   background: var(--raised);
   cursor: pointer;
   overflow: hidden;
-  /* --ar is set per-tile from the manifest */
-  flex: 1 1 calc(var(--ar) * var(--row));
-  height: var(--row);
-  /* stop a lone wide photo stretching to absurd width */
-  max-width: 100%;
+  border-radius: var(--radius);
+
+  flex-grow: var(--ar);
+  flex-shrink: 1;
+  flex-basis: calc(var(--ar) * var(--row));
+  aspect-ratio: var(--ar);
+  max-width: 100%;       /* stop a lone wide photo stretching to absurd width */
+
+  transition: transform .28s var(--ease), box-shadow .28s var(--ease);
 }
 
 /* keeps the final row from stretching its items across the full width */
@@ -152,14 +159,22 @@ body.lightbox-open { overflow: hidden; }
 
 .tile img.ready { opacity: 1; }
 
+/* lift and bloom */
 @media (hover: hover) {
+  .tile:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--tile-shadow);
+  }
   .tile:hover img { filter: brightness(1); }
 }
+
+.tile:active { transform: translateY(-1px); }
 
 .tile:focus-visible {
   outline: 2px solid var(--safelight);
   outline-offset: 3px;
 }
+
 
 /* --- album tiles ---------------------------------------------------------
    An album sits in the same grid as a photograph, distinguished only by its
@@ -209,41 +224,16 @@ body.lightbox-open { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 
-/* --- back out of an album --------------------------------------------------
-   No heading, no count: the album's name is already on the tile you clicked,
-   so all that is needed is a way out.
-   --------------------------------------------------------------------------- */
 
-.back {
-  position: fixed;
-  top: clamp(14px, 2.4vw, 24px);
-  left: clamp(14px, 2.4vw, 24px);
-  z-index: 60;
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  border: 1px solid var(--hairline);
-  background: var(--chip);
-  color: var(--text);
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  transition: border-color .2s ease;
-}
+/* --- fixed chrome --------------------------------------------------------
+   A way out of an album, and the theme toggle. No headings: the album's name
+   is already on the tile you clicked.
+   ------------------------------------------------------------------------- */
 
-.back[hidden] { display: none; }
-.back:hover { border-color: var(--muted); }
-.back:focus-visible { outline: 2px solid var(--safelight); outline-offset: 2px; }
-
-
-/* --- theme toggle -------------------------------------------------------- */
-
+.back,
 .theme-toggle {
   position: fixed;
   top: clamp(14px, 2.4vw, 24px);
-  right: clamp(14px, 2.4vw, 24px);
   z-index: 60;
   width: 38px;
   height: 38px;
@@ -259,18 +249,25 @@ body.lightbox-open { overflow: hidden; }
   transition: border-color .2s ease, color .2s ease;
 }
 
+.back { left: clamp(14px, 2.4vw, 24px); }
+.theme-toggle { right: clamp(14px, 2.4vw, 24px); }
+
+.back[hidden] { display: none; }
+
+.back:hover,
 .theme-toggle:hover { border-color: var(--muted); }
-.theme-toggle:focus-visible { outline: 2px solid var(--safelight); outline-offset: 2px; }
+
+.back:focus-visible,
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--safelight);
+  outline-offset: 2px;
+}
 
 /* one icon per theme; only the relevant one is shown */
 .theme-toggle .sun { display: none; }
-:root[data-theme="dark"] .theme-toggle .sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .sun  { display: block; }
 :root[data-theme="dark"] .theme-toggle .moon { display: none; }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .theme-toggle .sun  { display: block; }
-  :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
-}
 
 /* On a phone a justified row has no room to justify. One photograph per row,
    full width, each keeping its true aspect ratio. */
@@ -281,15 +278,12 @@ body.lightbox-open { overflow: hidden; }
 
   .tile {
     width: 100%;
-    height: auto;
-    aspect-ratio: var(--ar);
     margin-bottom: var(--gap);
   }
-
-  .tile img { object-fit: contain; }
 }
 
-/* --- status ------------------------------------------------------------- */
+
+/* --- status -------------------------------------------------------------- */
 
 .status {
   padding: var(--pad);
@@ -300,7 +294,6 @@ body.lightbox-open { overflow: hidden; }
 }
 
 .status[hidden] { display: none; }
-
 .status.error { color: var(--safelight); }
 
 
@@ -342,7 +335,6 @@ body.lightbox-open { overflow: hidden; }
   display: grid;
   place-items: center;
   padding: clamp(14px, 4vh, 48px) clamp(14px, 5vw, 84px);
-  transition: padding .35s cubic-bezier(.22,.61,.36,1);
 }
 
 /* Image and plate as one object. Its size is set in JS from the photograph's
@@ -353,6 +345,7 @@ body.lightbox-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   background: var(--card-bg);
+  border-radius: var(--radius);
   /* the mat runs all the way around the photograph; the plate below adds the
      heavier bottom edge that makes it read as a mounted print */
   padding: var(--mat) var(--mat) 0;
@@ -361,14 +354,14 @@ body.lightbox-open { overflow: hidden; }
   /* the card takes each photograph's shape, so stepping between a portrait
      and a landscape changes its proportions -- animate that instead of
      snapping, or every step through the gallery reads as a glitch */
-  transition: width .34s cubic-bezier(.22,.61,.36,1),
-              height .34s cubic-bezier(.22,.61,.36,1),
+  transition: width .34s var(--ease),
+              height .34s var(--ease),
               box-shadow .35s ease;
   box-shadow: var(--card-shadow);
 }
 
-/* no animation on the very first open: there is no previous shape to move
-   from, and animating out of nothing looks like a glitch of its own */
+/* No animation on a fresh open: there is no previous shape to move from, and
+   when the view transition is doing the morph this would fight it. */
 .card.instant { transition: none; }
 
 .frame {
@@ -376,6 +369,7 @@ body.lightbox-open { overflow: hidden; }
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  border-radius: calc(var(--radius) - 2px);
 }
 
 .placeholder {
@@ -393,10 +387,6 @@ body.lightbox-open { overflow: hidden; }
 
 .placeholder.hidden { opacity: 0; }
 
-/* while a new photograph is being opened the old canvas is stale, so hide it
-   rather than letting it flash under the incoming blur */
-.lightbox.swapping .viewer { opacity: 0; transition: none; }
-
 .viewer {
   position: absolute;
   inset: 0;
@@ -405,6 +395,11 @@ body.lightbox-open { overflow: hidden; }
 }
 
 .viewer.ready { opacity: 1; }
+
+/* while a new photograph is being opened the old canvas is stale, so hide it
+   rather than letting it flash under the incoming blur */
+.lightbox.swapping .viewer { opacity: 0; transition: none; }
+
 
 /* --- the plate ------------------------------------------------------------
    Attached to the underside of the photograph, like the caption card under a
@@ -419,7 +414,6 @@ body.lightbox-open { overflow: hidden; }
   gap: 20px;
   padding: 12px 0 calc(var(--mat) + 2px);
   background: var(--card-bg);
-  transition: none;
 }
 
 .plate-text {
@@ -449,7 +443,7 @@ body.lightbox-open { overflow: hidden; }
   color: var(--card-muted);
 }
 
-/* the maker's mark, right */
+/* the maker's mark, right. Empty unless a matching SVG is in assets/logos/. */
 .plate-mark {
   flex: 0 0 auto;
   display: flex;
@@ -465,25 +459,13 @@ body.lightbox-open { overflow: hidden; }
   object-fit: contain;
 }
 
-/* fallback when no logo file exists for this maker */
-.plate-mark .wordmark {
-  font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.plate:empty { display: none; }
-
 @media (max-width: 560px) {
-  .plate { padding: 10px 12px 11px; gap: 12px; }
+  .plate { gap: 12px; }
   .plate-body { font-size: 13.5px; }
   .plate-spec { font-size: 11.5px; gap: 0 8px; }
-  .plate-mark .wordmark { font-size: 13px; }
   .plate-mark img { height: 14px; }
 }
+
 
 /* --- controls ------------------------------------------------------------ */
 
@@ -528,23 +510,44 @@ body.lightbox-open { overflow: hidden; }
 .nav.next { right: clamp(10px, 2vw, 22px); }
 .nav[disabled] { opacity: 0; pointer-events: none; }
 
+/* the chrome gets out of the way while the photograph is being moved around */
+.lightbox.interacting .close,
+.lightbox.interacting .nav {
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (max-width: 620px) {
   .nav { display: none; }   /* swipe instead */
 }
 
-/* --- OpenSeadragon navigator --------------------------------------------- */
 
-.openseadragon-canvas { outline: none !important; }
+/* --- the open/close morph ------------------------------------------------
+   The thumbnail and the card's frame share one view-transition name, so the
+   browser animates them as a single object moving between the two. Browsers
+   without the API simply get the fade, which is why nothing here is required
+   for the lightbox to work.
+   ------------------------------------------------------------------------- */
 
-.openseadragon-container .navigator {
-  border: 1px solid var(--hairline) !important;
-  background: var(--raised) !important;
-  border-radius: 2px;
+::view-transition-group(photo) {
+  animation-duration: .42s;
+  animation-timing-function: var(--ease);
 }
+
+/* the thumbnail and the frame hold the same aspect ratio, so filling the
+   morphing box keeps the photograph from squashing on the way across */
+::view-transition-old(photo),
+::view-transition-new(photo) {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;
     transition-duration: .01ms !important;
   }
+  .tile:hover { transform: none; }
 }

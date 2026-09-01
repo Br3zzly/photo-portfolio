@@ -15,17 +15,34 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&display=swap">
 
-<link rel="stylesheet" href="assets/style.css?v=25">
+<link rel="stylesheet" href="assets/style.css?v=26">
 
 <script>
-  // Runs before first paint so a saved choice never flashes the wrong theme.
-  // No saved choice means we leave it alone and the CSS follows the system.
-  try {
-    var saved = localStorage.getItem("theme");
-    if (saved === "dark" || saved === "light") {
-      document.documentElement.setAttribute("data-theme", saved);
-    }
-  } catch (e) { /* private mode: fall through to the system preference */ }
+  // Runs before first paint, so no saved choice ever flashes the wrong theme.
+  // Resolving the system preference here too means the stylesheet needs only
+  // one dark block instead of one for the media query and one for the toggle.
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (e) { /* private mode */ }
+    document.documentElement.dataset.theme =
+      (saved === "dark" || saved === "light") ? saved
+      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  })();
+</script>
+
+<!-- Every module URL is versioned in this one place. Bump the number here and
+     in the stylesheet link above whenever you edit either, or GitHub Pages
+     will keep serving the cached copy for about ten minutes. -->
+<script type="importmap">
+{
+  "imports": {
+    "app/manifest": "./assets/modules/manifest.js?v=26",
+    "app/theme":    "./assets/modules/theme.js?v=26",
+    "app/grid":     "./assets/modules/grid.js?v=26",
+    "app/viewer":   "./assets/modules/viewer.js?v=26",
+    "app/lightbox": "./assets/modules/lightbox.js?v=26"
+  }
+}
 </script>
 </head>
 <body>
@@ -103,6 +120,6 @@
 </div>
 
 <script src="assets/openseadragon.min.js" defer></script>
-<script src="assets/app.js?v=25" defer></script>
+<script type="module" src="assets/app.js?v=26"></script>
 </body>
 </html>

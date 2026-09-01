@@ -17,9 +17,6 @@ tiles/
 thumbs/
 .manifest.tmp.json
 
-# Local test harness, points at local tiles that are not committed
-dev/
-
 # Python
 __pycache__/
 *.py[cod]

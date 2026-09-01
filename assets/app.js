@@ -1,93 +1,58 @@
-/* ---------------------------------------------------------------------------
-   Gallery + deep-zoom lightbox. No framework, no build step.
+/* Entry point: loads the manifest, owns the view state, and keeps it in step
+   with the URL.
 
-   The manifest lives in the R2 bucket alongside the tiles, so publishing a
-   photo never touches this repository.
-   --------------------------------------------------------------------------- */
+   Three states, all expressible as a URL so any of them can be shared:
+     /                  -> everything loose in the collection
+     ?album=Kyoto       -> one album
+     ?id=Kyoto/temple   -> a photograph, over whichever view it belongs to */
 
-const BUCKET = "https://pub-9775c4eec7a34ee9bedf8364e574d557.r2.dev";
+import { loadManifest } from "app/manifest";
+import { initTheme } from "app/theme";
+import { renderGrid, tileImageFor } from "app/grid";
+import { initLightbox, showPhoto, hidePhoto, isOpen } from "app/lightbox";
 
-const el = (id) => document.getElementById(id);
+const grid     = document.getElementById("grid");
+const statusEl = document.getElementById("status");
+const backBtn  = document.getElementById("back");
 
-const grid        = el("grid");
-const status      = el("status");
-const lightbox    = el("lightbox");
-const stage       = el("stage");
-const placeholder = el("placeholder");
-const viewerEl    = el("viewer");
-const card        = el("card");
-const plate       = el("plate");
-const prevBtn     = el("prev");
-const nextBtn     = el("next");
+let photos = [];        // every published photograph, newest first
+let albums = [];        // one entry per folder under photos/
+let shown  = [];        // the photographs the current view shows, in order
+let album  = null;      // album name while viewing one, otherwise null
+let index  = -1;        // index into shown; -1 means nothing is open
+let renderedFor;        // which view the grid currently holds
+let booted = false;     // suppresses the morph on the very first route
 
-let photos = [];     // every published photo, newest first
-let albums = [];     // one entry per folder under photos/
-let shown = [];      // the photos the current view is showing, in order
-let album = null;    // album name when viewing one, otherwise null
-let index = -1;      // index into `shown`; -1 means no photo is open
-let viewer = null;   // the OpenSeadragon instance, created once and reused
-let idleTimer = null;
+initTheme(document.getElementById("theme-toggle"));
+initLightbox({ onClose: closeToGallery, onStep: step });
+backBtn.addEventListener("click", () => go(location.pathname));
 
+boot();
 
-/* --- theme ---------------------------------------------------------------
-   Follows the system until the visitor chooses, then remembers the choice.
-   The <head> script has already applied any saved value.
-   ------------------------------------------------------------------------- */
-
-function currentTheme() {
-  const explicit = document.documentElement.getAttribute("data-theme");
-  if (explicit) return explicit;
-  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-el("theme-toggle").addEventListener("click", () => {
-  const next = currentTheme() === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  try { localStorage.setItem("theme", next); } catch (e) { /* private mode */ }
-});
-
-// enable colour transitions only after first paint
-requestAnimationFrame(() =>
-  document.documentElement.classList.add("theme-ready")
-);
-
-
-/* --- boot ---------------------------------------------------------------- */
-
-init();
-
-async function init() {
+async function boot() {
   try {
-    const res = await fetch(`${BUCKET}/photos.json`, { cache: "no-cache" });
-    if (!res.ok) throw new Error(`manifest returned ${res.status}`);
-    const data = await res.json();
-    photos = Array.isArray(data) ? data : data.photos || [];
-    albums = (Array.isArray(data) ? [] : data.albums) || [];
+    ({ photos, albums } = await loadManifest());
   } catch (err) {
-    status.textContent =
+    statusEl.textContent =
       "Could not load the gallery. If this keeps happening the image host may be unreachable.";
-    status.classList.add("error");
+    statusEl.classList.add("error");
     console.error(err);
     return;
   }
 
   if (!photos.length) {
-    status.textContent = "No photographs published yet.";
+    statusEl.textContent = "No photographs published yet.";
     return;
   }
 
-  status.hidden = true;
+  statusEl.hidden = true;
   window.addEventListener("popstate", route);
-  route({ replace: true });
+  route();
+  booted = true;
 }
 
 
-/* --- routing -------------------------------------------------------------
-   Three states, all expressible as a URL so any of them can be shared:
-     /                -> everything
-     ?album=Kyoto     -> one album
-     ?id=Kyoto/temple -> a photo, opened over whichever view it belongs to
-   ------------------------------------------------------------------------- */
+/* --- routing ------------------------------------------------------------- */
 
 function route() {
   const params = new URLSearchParams(location.search);
@@ -95,22 +60,26 @@ function route() {
   const wantedAlbum = params.get("album") ||
     (wantedId && wantedId.includes("/") ? wantedId.split("/")[0] : null);
 
+  const leaving = index;          // the tile to morph back into, if we close
   showView(wantedAlbum);
 
   if (wantedId) {
     const i = shown.findIndex((p) => p.id === wantedId);
-    if (i >= 0) { openAt(i); return; }
+    if (i >= 0) {
+      open(i, booted ? tileFor(i) : null);
+      return;
+    }
   }
-  closeLightbox();
-}
 
-let renderedFor = undefined;   // which album the grid currently shows
+  if (isOpen()) hidePhoto({ toTile: tileFor(leaving) });
+  index = -1;
+}
 
 function showView(name) {
   album = name && albums.some((a) => a.name === name) ? name : null;
 
-  // Re-rendering on every route change would reset the scroll position every
-  // time a photo is closed. Only rebuild when the view actually changed.
+  // Re-rendering on every route change would reset the scroll position each
+  // time a photograph is closed. Only rebuild when the view actually changed.
   if (renderedFor === album) return;
   renderedFor = album;
 
@@ -119,9 +88,17 @@ function showView(name) {
     : photos.filter((p) => !p.album);
 
   // the only chrome on the page: a way back out of an album
-  el("back").hidden = !album;
+  backBtn.hidden = !album;
 
-  renderGrid();
+  renderGrid(grid, {
+    photos: shown,
+    albums: album ? [] : albums,
+    onPhoto: (photo, i, img) => {
+      open(i, img);
+      history.pushState({}, "", photoUrl(photo.id));
+    },
+    onAlbum: (a) => go(`${location.pathname}?album=${encodeURIComponent(a.name)}`),
+  });
 }
 
 function go(url) {
@@ -129,443 +106,40 @@ function go(url) {
   route();
 }
 
+const photoUrl = (id) => `${location.pathname}?id=${encodeURIComponent(id)}`;
 
-/* --- gallery ------------------------------------------------------------- */
-
-function renderGrid() {
-  grid.replaceChildren();
-  const frag = document.createDocumentFragment();
-
-  // On the home view, albums sit in the same grid as loose photographs.
-  if (!album) {
-    albums.forEach((a) => frag.appendChild(albumTile(a)));
-  }
-
-  shown.forEach((photo, i) => frag.appendChild(photoTile(photo, i)));
-  grid.appendChild(frag);
-  window.scrollTo({ top: 0 });
-}
-
-function tileShell(ar, label) {
-  const tile = document.createElement("button");
-  tile.className = "tile";
-  tile.style.setProperty("--ar", ar.toFixed(4));
-  tile.setAttribute("role", "listitem");
-  tile.setAttribute("aria-label", label);
-  return tile;
-}
-
-function thumbImg(id, rev, w, h, lqip, alt) {
-  const img = document.createElement("img");
-  img.loading = "lazy";
-  img.decoding = "async";
-  img.width = w || 0;
-  img.height = h || 0;
-  img.alt = alt || "";
-  // the inlined placeholder paints immediately, so tiles are never empty
-  if (lqip) img.style.backgroundImage = `url("${lqip}")`;
-  img.src = `${BUCKET}/thumbs/${rev ? `${id}__${rev}` : id}.webp`;
-
-  const reveal = () => img.classList.add("ready");
-  if (img.complete) reveal();
-  else img.addEventListener("load", reveal, { once: true });
-  return img;
-}
-
-function photoTile(photo, i) {
-  const ar = (photo.width || 3) / (photo.height || 2);
-  const tile = tileShell(ar, photo.title || photo.id);
-  tile.appendChild(
-    thumbImg(photo.id, photo.rev, photo.width, photo.height, photo.lqip, photo.title)
-  );
-  tile.addEventListener("click", () => {
-    openAt(i);
-    history.pushState({}, "", `${location.pathname}?id=${encodeURIComponent(photo.id)}`);
-  });
-  return tile;
-}
-
-function albumTile(a) {
-  const ar = (a.coverWidth || 3) / (a.coverHeight || 2);
-  const tile = tileShell(ar, `Album: ${a.name}`);
-  tile.classList.add("album");
-  tile.appendChild(
-    thumbImg(a.cover, a.coverRev, a.coverWidth, a.coverHeight, a.coverLqip, "")
-  );
-
-  const label = document.createElement("span");
-  label.className = "album-label";
-  const name = document.createElement("span");
-  name.className = "album-name";
-  name.textContent = a.name;
-  const count = document.createElement("span");
-  count.className = "album-count";
-  count.textContent = a.count;
-  label.append(name, count);
-  tile.appendChild(label);
-
-  tile.addEventListener("click", () =>
-    go(`${location.pathname}?album=${encodeURIComponent(a.name)}`)
-  );
-  return tile;
-}
+/* Albums are rendered before photographs in the same grid, so a photograph's
+   tile sits that many children further along. */
+const tileFor = (i) =>
+  i < 0 ? null : tileImageFor(grid, i, album ? 0 : albums.length);
 
 
-/* --- lightbox ------------------------------------------------------------ */
+/* --- the open photograph -------------------------------------------------
+   Opens from the current view, so prev/next walk the album you are in rather
+   than the whole collection.
+   ------------------------------------------------------------------------- */
 
-/* Opens a photo from the current view. Prev/next therefore walk the album you
-   are in, not the whole collection. */
-function openAt(i) {
+function open(i, fromTile) {
   if (i < 0 || i >= shown.length) return;
-  const photo = shown[i];
   index = i;
-
-  const opening = lightbox.hidden;          // opening fresh vs stepping along
-  lightbox.hidden = false;
-  document.body.classList.add("lightbox-open");
-  requestAnimationFrame(() => lightbox.classList.add("open"));
-
-  // the outgoing canvas still holds the previous photograph
-  lightbox.classList.add("swapping");
-  placeholder.src = photo.lqip || "";
-  placeholder.classList.remove("hidden");
-  viewerEl.classList.remove("ready");
-
-  fillMeta(photo);
-  prevBtn.disabled = i === 0;
-  nextBtn.disabled = i === shown.length - 1;
-
-  // sizing without animation on a first open, animated when stepping between
-  // photographs of different shapes
-  card.classList.toggle("instant", opening);
-  sizeCard();
-  if (opening) requestAnimationFrame(() => card.classList.remove("instant"));
-  refitSoon();
-
-  showTiles(photo);
-}
-
-/* Tears the lightbox down without touching history. */
-function closeLightbox() {
-  if (index < 0) return;
-  index = -1;
-  lightbox.classList.remove("open", "interacting");
-  document.body.classList.remove("lightbox-open");
-  setTimeout(() => {
-    lightbox.hidden = true;
-    if (viewer) viewer.close();
-  }, 280);
-}
-
-/* The close button goes back to whichever view the photo came from. */
-function close() {
-  go(album
-    ? `${location.pathname}?album=${encodeURIComponent(album)}`
-    : location.pathname);
+  showPhoto(shown[i], {
+    hasPrev: i > 0,
+    hasNext: i < shown.length - 1,
+    fromTile,
+  });
 }
 
 function step(delta) {
   const next = index + delta;
   if (next < 0 || next >= shown.length) return;
-  openAt(next);
-  history.replaceState({}, "", `${location.pathname}?id=${encodeURIComponent(shown[next].id)}`);
+  // no morph when stepping: the card animates between the two shapes instead
+  open(next, null);
+  history.replaceState({}, "", photoUrl(shown[next].id));
 }
 
-/* The plate under the photograph:
-     left, bold  -- camera maker + model
-     left, grey  -- lens, focal length, aperture, shutter, ISO
-     right       -- the maker's mark
-   Everything is built from what exists, so a stacked frame with no lens or
-   shutter collapses to what it has rather than rendering empty slots. */
-function fillMeta(photo) {
-  el("m-camera").textContent = photo.camera || "";
-
-  const parts = [
-    photo.lens,
-    photo.focal,
-    photo.aperture,
-    photo.shutter ? `${photo.shutter}s` : "",
-    photo.iso ? `ISO ${photo.iso}` : "",
-    ...Object.values(photo.extra || {}).filter(Boolean),
-  ].filter(Boolean);
-
-  // separate elements, not a joined string -- HTML collapses runs of spaces,
-  // so the gaps have to come from CSS
-  el("m-spec").replaceChildren(
-    ...parts.map((p) => {
-      const s = document.createElement("span");
-      s.textContent = p;
-      return s;
-    })
-  );
-
-  el("m-mark").replaceChildren(makerMark(photo));
+/* The close button goes back to whichever view the photograph came from. */
+function closeToGallery() {
+  go(album
+    ? `${location.pathname}?album=${encodeURIComponent(album)}`
+    : location.pathname);
 }
-
-/* Uses assets/logos/<maker>.svg when you have supplied one, otherwise sets the
-   maker's name as a wordmark. No manufacturer artwork ships with this repo. */
-function makerMark(photo) {
-  const make = (photo.make || (photo.camera || "").split(/\s+/)[0] || "").trim();
-  if (!make) return document.createDocumentFragment();
-
-  const word = document.createElement("span");
-  word.className = "wordmark";
-  word.textContent = make;
-
-  const slug = make.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  const img = document.createElement("img");
-  img.alt = make;
-  img.addEventListener("error", () => img.replaceWith(word), { once: true });
-  img.src = `assets/logos/${slug}.svg`;
-  return img;
-}
-
-
-/* --- sizing --------------------------------------------------------------
-   The card is laid out from the photograph's aspect ratio rather than left to
-   the browser, because the plate's height is only known after it is filled.
-   ------------------------------------------------------------------------- */
-
-function sizeCard() {
-  if (index < 0) return;
-  const photo = shown[index];
-  if (!photo) return;
-
-  const ar = (photo.width || 3) / (photo.height || 2);
-  const cs = getComputedStyle(stage);
-
-  // Measured from the lightbox, never from the stage. The stage is sized by
-  // its own content, so measuring it would feed the card's current size back
-  // into the calculation and let it grow without bound.
-  const availW = lightbox.clientWidth
-    - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const availH = lightbox.clientHeight
-    - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-
-  // The card is border-box, so its width includes the mat around the
-  // photograph. Fit the *frame* to the aspect ratio, then add the mat and the
-  // plate back on to get the card's outer size.
-  const cc = getComputedStyle(card);
-  const matX = parseFloat(cc.paddingLeft) + parseFloat(cc.paddingRight);
-  const matY = parseFloat(cc.paddingTop) + parseFloat(cc.paddingBottom);
-
-  // two passes: the plate can wrap, so its height depends on the width we pick
-  let w = availW;
-  for (let pass = 0; pass < 2; pass++) {
-    card.style.width = `${Math.round(w)}px`;
-    const plateH = plate.offsetHeight;
-
-    let frameW = w - matX;
-    let frameH = frameW / ar;
-    const roomForFrame = availH - matY - plateH;
-    if (frameH > roomForFrame) {
-      frameH = roomForFrame;
-      frameW = frameH * ar;
-      w = Math.min(availW, frameW + matX);
-    }
-    card.style.width = `${Math.round(w)}px`;
-    card.style.height = `${Math.round(frameH + matY + plateH)}px`;
-  }
-}
-
-/* Fit the photograph to the frame.
- *
- * Must be called once the card has finished changing size. OpenSeadragon
- * computes the fit from the container it sees at that instant, so fitting
- * while the card is still animating leaves the photograph at the previous
- * shape's scale -- a portrait sitting small inside a correct portrait frame.
- */
-let refitTimer = null;
-
-function refit() {
-  if (!viewer || !viewer.world.getItemCount()) return;
-  viewer.viewport.goHome(true);
-}
-
-// the card animates between each photograph's proportions; re-fit when it lands
-card.addEventListener("transitionend", (e) => {
-  if (e.target === card && (e.propertyName === "width" || e.propertyName === "height")) {
-    refit();
-  }
-});
-
-// belt and braces: transitionend does not fire if the size did not actually
-// change, and a dropped frame can swallow it
-function refitSoon() {
-  clearTimeout(refitTimer);
-  refitTimer = setTimeout(refit, 420);
-}
-
-let resizeTimer = null;
-window.addEventListener("resize", () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(sizeCard, 120);
-});
-
-// the stage's padding animates when entering and leaving full-bleed; the card
-// can only be measured accurately once it has finished
-stage.addEventListener("transitionend", (e) => {
-  if (e.target === stage && e.propertyName.startsWith("padding")) {
-    clearTimeout(resizeTimer);
-    sizeCard();
-  }
-});
-
-
-/* --- deep zoom ----------------------------------------------------------- */
-
-function showTiles(photo) {
-  // the tile path carries a fingerprint of the source, so re-tiling a photo
-  // produces a new URL rather than quietly colliding with a cached copy
-  const source = photo.rev
-    ? `${BUCKET}/${photo.id}__${photo.rev}.dzi`
-    : `${BUCKET}/${photo.id}.dzi`;
-
-  if (!viewer) {
-    viewer = makeViewer(source);
-    wireViewer();
-  } else {
-    viewer.open(source);
-  }
-}
-
-function makeViewer(tileSources) {
-  const base = {
-    element: viewerEl,
-    tileSources,
-    prefixUrl: "",            // no default UI images; we supply our own chrome
-    showNavigationControl: false,
-    showNavigator: false,
-    crossOriginPolicy: "Anonymous",
-    gestureSettingsMouse: { clickToZoom: false, dblClickToZoom: false },
-    gestureSettingsTouch: { pinchRotate: false, clickToZoom: false, dblClickToZoom: false },
-    maxZoomPixelRatio: 2,
-    minZoomImageRatio: 0.9,
-    visibilityRatio: 1,
-    constrainDuringPan: true,
-    springStiffness: 7.5,
-    animationTime: 0.9,
-    immediateRender: false,
-    preserveImageSizeOnResize: true,
-    // keep memory bounded on phones
-    maxImageCacheCount: 220,
-  };
-
-  // The WebGL drawer holds 1:1 zoom far better on iOS. Fall back silently.
-  try {
-    return OpenSeadragon({ ...base, drawer: "webgl" });
-  } catch (err) {
-    console.warn("WebGL drawer unavailable, using canvas", err);
-    return OpenSeadragon(base);
-  }
-}
-
-function wireViewer() {
-  viewer.addHandler("open", () => {
-    sizeCard();
-    refit();
-    lightbox.classList.remove("swapping");
-    viewerEl.classList.add("ready");
-    setTimeout(() => placeholder.classList.add("hidden"), 220);
-  });
-
-  viewer.addHandler("open-failed", () => {
-    // leave the blurred placeholder up rather than showing a broken frame
-    viewerEl.classList.remove("ready");
-  });
-
-  viewer.addHandler("canvas-double-click", (ev) => {
-    ev.preventDefaultAction = true;
-    toggleZoom(ev.position);
-  });
-
-  // chrome fades while you are actually moving the image around
-  ["canvas-drag", "canvas-scroll", "canvas-pinch"].forEach((evt) =>
-    viewer.addHandler(evt, markInteracting)
-  );
-
-  viewer.addHandler("animation-finish", () =>
-    lightbox.classList.remove("interacting")
-  );
-}
-
-function markInteracting() {
-  lightbox.classList.add("interacting");
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => lightbox.classList.remove("interacting"), 1400);
-
-}
-
-/* The photograph never leaves the card, so the card never changes size, so
-   this can be read straight off the viewer without the feedback loop that
-   the old full-bleed mode had. */
-function isZoomedIn() {
-  if (!viewer || !viewer.world.getItemCount()) return false;
-  return viewer.viewport.getZoom(true) > viewer.viewport.getHomeZoom() * 1.05;
-}
-
-/* Double-click toggles between fit and 1:1, inside the card. */
-function toggleZoom(point) {
-  const item = viewer.world.getItemAt(0);
-  if (!item) return;
-
-  if (isZoomedIn()) {
-    viewer.viewport.goHome();
-    return;
-  }
-
-  const full = item.imageToViewportZoom(1);
-  const home = viewer.viewport.getHomeZoom();
-  const target = full > home * 1.05 ? full : home * 2;
-  viewer.viewport.zoomTo(
-    target, point ? viewer.viewport.pointFromPixel(point) : null
-  );
-}
-
-
-/* --- input --------------------------------------------------------------- */
-
-el("close").addEventListener("click", close);
-prevBtn.addEventListener("click", () => step(-1));
-nextBtn.addEventListener("click", () => step(1));
-
-document.addEventListener("keydown", (e) => {
-  if (index < 0) return;
-
-  if (e.key === "Escape") {
-    // first Escape leaves a zoom, second closes the photo
-    if (isZoomedIn()) {
-      viewer.viewport.goHome();
-    } else {
-      close();
-    }
-  } else if (e.key === "ArrowLeft" && !isZoomedIn()) {
-    step(-1);
-  } else if (e.key === "ArrowRight" && !isZoomedIn()) {
-    step(1);
-  }
-});
-
-/* swipe between photos on touch, but only when not zoomed in -- otherwise a
-   swipe means panning the photograph */
-let touchStart = null;
-
-stage.addEventListener("touchstart", (e) => {
-  if (e.touches.length !== 1 || isZoomedIn()) return;
-  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
-}, { passive: true });
-
-stage.addEventListener("touchend", (e) => {
-  if (!touchStart) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - touchStart.x;
-  const dy = t.clientY - touchStart.y;
-  const quick = Date.now() - touchStart.t < 600;
-  touchStart = null;
-
-  if (quick && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.6) {
-    step(dx < 0 ? 1 : -1);
-  }
-}, { passive: true });
-
-el("back").addEventListener("click", () => go(location.pathname));
