@@ -254,6 +254,10 @@ body.lightbox-open { overflow: hidden; }
 
 .back[hidden] { display: none; }
 
+/* The lightbox has its own way out, in the same corner. Two chevrons stacked
+   on each other is just the album's back button showing through. */
+body.lightbox-open .back { display: none; }
+
 .back:hover,
 .theme-toggle:hover { border-color: var(--muted); }
 
